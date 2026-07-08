@@ -1,0 +1,32 @@
+{
+  "name": "extaggerated",
+  "version": "0.1.0",
+  "description": "Extaggerated Obsidian plugin for AI-assisted native tagging and node note generation.",
+  "main": "main.js",
+  "scripts": {
+    "build": "npm run build:js && npm run build:css",
+    "build:js": "tsc --noEmit && node esbuild.config.mjs production",
+    "build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./styles.css --minify"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "tags"
+  ],
+  "author": "Felix Folkebrant",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "esbuild": "^0.28.1",
+    "obsidian": "^1.13.0",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^6.0.3"
+  }
+}
