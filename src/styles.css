@@ -3,5 +3,5 @@
 @source "./**/*.{ts,tsx}";
 
 .xt-view {
-  font-family: var(--font-interface);
+	font-family: var(--font-interface);
 }

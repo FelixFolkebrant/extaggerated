@@ -1,10 +1,10 @@
 {
-  "id": "extaggerated",
-  "name": "Extaggerated",
-  "version": "0.1.0",
-  "main": "main.js",
-  "minAppVersion": "1.8.0",
-  "description": "AI-assisted native tagging and node note generation.",
-  "author": "Felix Folkebrant",
-  "isDesktopOnly": false
+	"id": "extaggerated",
+	"name": "Extaggerated",
+	"version": "0.1.0",
+	"main": "main.js",
+	"minAppVersion": "1.8.0",
+	"description": "AI-assisted native tagging and node note generation.",
+	"author": "Felix Folkebrant",
+	"isDesktopOnly": false
 }
