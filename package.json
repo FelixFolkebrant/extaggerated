@@ -8,7 +8,7 @@
 		"build:js": "tsc --noEmit && node esbuild.config.mjs production",
 		"build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./styles.css --minify",
 		"format": "biome format --write package.json package-lock.json biome.json manifest.json tsconfig.json esbuild.config.mjs src",
-		"format:check": "biome format package.json package-lock.json biome.json manifest.json tsconfig.json esbuild.config.mjs src"
+		"format:check": "node scripts/check-tailwind-vars.mjs && biome format package.json package-lock.json biome.json manifest.json tsconfig.json esbuild.config.mjs src"
 	},
 	"keywords": [
 		"obsidian",

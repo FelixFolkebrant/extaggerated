@@ -6,8 +6,13 @@ import {
 	ExtaggeratedSettingTab,
 	type ExtaggeratedSettings,
 } from "./settings";
-import { getActiveNoteFreshness, type FreshnessStatus } from "./freshness";
-import { syncActiveNoteTags } from "./noteSync";
+import {
+	getActiveNoteFreshness,
+	getChangedFileQueue,
+	type ChangedFileQueueItem,
+	type FreshnessStatus,
+} from "./freshness";
+import { syncActiveNoteTags, syncNoteTags } from "./noteSync";
 import {
 	mountExtaggeratedView,
 	renderExtaggeratedView,
@@ -15,6 +20,11 @@ import {
 } from "./ui/mount";
 
 const XT_VIEW_TYPE = "extaggerated-view";
+
+export type BatchSyncStatus =
+	| { type: "syncing" }
+	| { type: "synced"; message: string }
+	| { type: "failed"; message: string };
 
 export default class ExtaggeratedPlugin extends Plugin {
 	settings: ExtaggeratedSettings = DEFAULT_SETTINGS;
@@ -153,9 +163,14 @@ class OverwriteWarningModal extends Modal {
 }
 
 class ExtaggeratedPanelView extends ItemView {
+	private changedFiles: ChangedFileQueueItem[] = [];
 	private root: Root | null = null;
 	private freshnessStatus: FreshnessStatus = { type: "no-note" };
-	private refreshId = 0;
+	private freshnessRefreshId = 0;
+	private queueLoading = false;
+	private queueRefreshId = 0;
+	private selectedPaths = new Set<string>();
+	private syncStatuses: Record<string, BatchSyncStatus> = {};
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -205,6 +220,7 @@ class ExtaggeratedPanelView extends ItemView {
 		);
 
 		await this.refreshFreshness();
+		await this.refreshQueue();
 	}
 
 	async onClose(): Promise<void> {
@@ -213,10 +229,10 @@ class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private async refreshFreshness(): Promise<void> {
-		const refreshId = ++this.refreshId;
+		const refreshId = ++this.freshnessRefreshId;
 		const freshnessStatus = await getActiveNoteFreshness(this.plugin);
 
-		if (refreshId !== this.refreshId) {
+		if (refreshId !== this.freshnessRefreshId) {
 			return;
 		}
 
@@ -234,12 +250,122 @@ class ExtaggeratedPanelView extends ItemView {
 
 	private viewState(): ExtaggeratedViewState {
 		return {
+			changedFiles: this.changedFiles,
 			freshnessStatus: this.freshnessStatus,
 			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
 			model: this.plugin.settings.model,
 			onInitializeTagging: () => {
 				void this.plugin.initializeTagging();
 			},
+			onRefreshQueue: () => {
+				void this.refreshQueue();
+			},
+			onSyncAll: () => {
+				void this.syncQueuedFiles(this.syncableQueuePaths());
+			},
+			onSyncSelected: () => {
+				void this.syncQueuedFiles(
+					this.syncableQueuePaths().filter((path) =>
+						this.selectedPaths.has(path),
+					),
+				);
+			},
+			onToggleQueuedFile: (path) => {
+				this.toggleQueuedFile(path);
+			},
+			queueLoading: this.queueLoading,
+			selectedPaths: [...this.selectedPaths],
+			syncStatuses: this.syncStatuses,
 		};
+	}
+
+	private async refreshQueue(): Promise<void> {
+		const refreshId = ++this.queueRefreshId;
+		this.queueLoading = true;
+		this.render();
+
+		const changedFiles = await getChangedFileQueue(this.plugin);
+
+		if (refreshId !== this.queueRefreshId) {
+			return;
+		}
+
+		this.changedFiles = changedFiles;
+		this.queueLoading = false;
+		this.selectedPaths = new Set(
+			[...this.selectedPaths].filter((path) =>
+				this.changedFiles.some((file) => file.path === path),
+			),
+		);
+		this.render();
+	}
+
+	private toggleQueuedFile(path: string): void {
+		if (this.selectedPaths.has(path)) {
+			this.selectedPaths.delete(path);
+		} else {
+			this.selectedPaths.add(path);
+		}
+
+		this.render();
+	}
+
+	private syncableQueuePaths(): string[] {
+		return this.changedFiles
+			.filter((file) => file.status !== "unavailable")
+			.map((file) => file.path);
+	}
+
+	private async syncQueuedFiles(paths: string[]): Promise<void> {
+		if (paths.length === 0) {
+			new Notice("Select at least one queued note to sync.");
+			return;
+		}
+
+		if (this.plugin.settings.openRouterApiKey.length === 0) {
+			new Notice("Add an OpenRouter API key before syncing XT tags.");
+			return;
+		}
+
+		for (const path of paths) {
+			const file = this.plugin.app.vault.getFileByPath(path);
+
+			if (!file) {
+				this.syncStatuses = {
+					...this.syncStatuses,
+					[path]: { message: "File no longer exists.", type: "failed" },
+				};
+				this.render();
+				continue;
+			}
+
+			this.syncStatuses = {
+				...this.syncStatuses,
+				[path]: { type: "syncing" },
+			};
+			this.render();
+
+			try {
+				const result = await syncNoteTags(this.plugin, file);
+				this.syncStatuses = {
+					...this.syncStatuses,
+					[path]: {
+						message: `${result.tagCount} tags`,
+						type: "synced",
+					},
+				};
+			} catch (error) {
+				this.syncStatuses = {
+					...this.syncStatuses,
+					[path]: {
+						message: error instanceof Error ? error.message : String(error),
+						type: "failed",
+					},
+				};
+			}
+			this.render();
+		}
+
+		await this.refreshQueue();
 	}
 }

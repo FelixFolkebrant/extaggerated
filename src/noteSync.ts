@@ -3,6 +3,10 @@ import type { TFile } from "obsidian";
 import type ExtaggeratedPlugin from "./main";
 import { generateTags, hashNoteBody, noteBodyForHash } from "./tagging";
 
+export interface SyncNoteTagsResult {
+	tagCount: number;
+}
+
 export async function syncActiveNoteTags(
 	plugin: ExtaggeratedPlugin,
 ): Promise<void> {
@@ -27,24 +31,37 @@ export async function syncActiveNoteTags(
 	}
 
 	try {
-		const markdown = await plugin.app.vault.read(file);
-		const contentHash = await hashNoteBody(markdown);
-		const tags = await generateTags({
-			apiKey: plugin.settings.openRouterApiKey,
-			model: plugin.settings.model,
-			noteText: noteBodyForHash(markdown),
-		});
-
-		if (tags.length === 0) {
-			throw new Error("OpenRouter returned no usable tags.");
-		}
-
-		await writeTags(plugin, file, tags, contentHash);
-		new Notice(`Synced ${tags.length} XT tags for ${file.basename}.`);
+		const result = await syncNoteTags(plugin, file);
+		new Notice(`Synced ${result.tagCount} XT tags for ${file.basename}.`);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		new Notice(`XT tag sync failed: ${message}`);
 	}
+}
+
+export async function syncNoteTags(
+	plugin: ExtaggeratedPlugin,
+	file: TFile,
+): Promise<SyncNoteTagsResult> {
+	if (plugin.settings.openRouterApiKey.length === 0) {
+		throw new Error("Add an OpenRouter API key before syncing XT tags.");
+	}
+
+	const markdown = await plugin.app.vault.read(file);
+	const contentHash = await hashNoteBody(markdown);
+	const tags = await generateTags({
+		apiKey: plugin.settings.openRouterApiKey,
+		model: plugin.settings.model,
+		noteText: noteBodyForHash(markdown),
+	});
+
+	if (tags.length === 0) {
+		throw new Error("OpenRouter returned no usable tags.");
+	}
+
+	await writeTags(plugin, file, tags, contentHash);
+
+	return { tagCount: tags.length };
 }
 
 async function writeTags(

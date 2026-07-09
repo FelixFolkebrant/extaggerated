@@ -9,6 +9,18 @@ export type FreshnessStatus =
 	| { type: "stale"; fileName: string }
 	| { type: "unavailable"; fileName: string; message: string };
 
+export type QueueFreshnessStatus = Exclude<
+	FreshnessStatus,
+	{ type: "no-note" }
+>;
+
+export interface ChangedFileQueueItem {
+	fileName: string;
+	path: string;
+	status: QueueFreshnessStatus["type"];
+	message?: string;
+}
+
 export async function getActiveNoteFreshness(
 	plugin: ExtaggeratedPlugin,
 ): Promise<FreshnessStatus> {
@@ -18,13 +30,45 @@ export async function getActiveNoteFreshness(
 		return { type: "no-note" };
 	}
 
-	const storedHash = frontmatterHash(plugin, file);
-	if (!storedHash) {
-		return { fileName: file.basename, type: "untagged" };
+	return getFileFreshness(plugin, file);
+}
+
+export async function getChangedFileQueue(
+	plugin: ExtaggeratedPlugin,
+): Promise<ChangedFileQueueItem[]> {
+	const queue: ChangedFileQueueItem[] = [];
+
+	for (const file of plugin.app.vault.getMarkdownFiles()) {
+		const freshness = await getFileFreshness(plugin, file);
+
+		if (freshness.type === "fresh") {
+			continue;
+		}
+
+		queue.push({
+			fileName: freshness.fileName,
+			message: freshness.type === "unavailable" ? freshness.message : undefined,
+			path: file.path,
+			status: freshness.type,
+		});
 	}
 
+	return queue.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function getFileFreshness(
+	plugin: ExtaggeratedPlugin,
+	file: TFile,
+): Promise<QueueFreshnessStatus> {
 	try {
-		const currentHash = await hashNoteBody(await plugin.app.vault.read(file));
+		const markdown = await plugin.app.vault.read(file);
+		const storedHash = frontmatterHash(plugin, file);
+
+		if (!storedHash) {
+			return { fileName: file.basename, type: "untagged" };
+		}
+
+		const currentHash = await hashNoteBody(markdown);
 
 		return {
 			fileName: file.basename,
