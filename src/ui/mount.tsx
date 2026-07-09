@@ -1,23 +1,38 @@
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ExtaggeratedView } from "./ExtaggeratedView";
+import type { FreshnessStatus } from "../freshness";
 
-interface MountExtaggeratedViewOptions {
-	container: HTMLElement;
+export interface ExtaggeratedViewState {
 	hasApiKey: boolean;
+	freshnessStatus: FreshnessStatus;
 	model: string;
+}
+
+interface MountExtaggeratedViewOptions extends ExtaggeratedViewState {
+	container: HTMLElement;
 }
 
 export function mountExtaggeratedView({
 	container,
-	hasApiKey,
-	model,
+	...state
 }: MountExtaggeratedViewOptions): Root {
 	const root = createRoot(container);
+	renderExtaggeratedView(root, state);
+	return root;
+}
+
+export function renderExtaggeratedView(
+	root: Root,
+	{ freshnessStatus, hasApiKey, model }: ExtaggeratedViewState,
+): void {
 	root.render(
 		<StrictMode>
-			<ExtaggeratedView hasApiKey={hasApiKey} model={model} />
+			<ExtaggeratedView
+				freshnessStatus={freshnessStatus}
+				hasApiKey={hasApiKey}
+				model={model}
+			/>
 		</StrictMode>,
 	);
-	return root;
 }
