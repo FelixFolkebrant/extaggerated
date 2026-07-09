@@ -9,9 +9,7 @@ export function ActiveNoteSummary({ freshnessStatus }: ActiveNoteSummaryProps) {
 
 	return (
 		<div className="grid gap-1">
-			<dt className="text-xs uppercase text-[var(--text-muted)]">
-				Active note
-			</dt>
+			<dt className="text-xs uppercase text-(--text-muted)">Active note</dt>
 			<dd className="flex items-center justify-between gap-3">
 				<span className="min-w-0 truncate" title={freshness.note}>
 					{freshness.note}
@@ -64,8 +62,7 @@ function freshnessDisplay(status: FreshnessStatus): {
 			};
 		case "no-note":
 			return {
-				className:
-					"bg-[var(--background-modifier-border)] text-[var(--text-muted)]",
+				className: "bg-(--background-modifier-border) text-(--text-muted)",
 				label: "No note",
 				note: "No markdown note selected",
 				title: "Open a markdown note to see XT freshness.",

@@ -34,10 +34,10 @@ export function ExtaggeratedView({
 }: ExtaggeratedViewProps) {
 	return (
 		<section className="xt-view flex h-full flex-col gap-4 overflow-hidden p-4 text-sm text-(--text-normal)">
-			<header className="flex items-center justify-between border-b border-[var(--background-modifier-border)] pb-3">
+			<header className="flex items-center justify-between border-b border-(--background-modifier-border) pb-3">
 				<div className="min-w-0">
 					<h1 className="truncate text-base font-semibold">Extaggerated</h1>
-					<p className="text-xs text-[var(--text-muted)]">XT</p>
+					<p className="text-xs text-(--text-muted)">XT</p>
 				</div>
 				<span
 					className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
@@ -52,12 +52,10 @@ export function ExtaggeratedView({
 
 			<dl className="grid gap-3">
 				<div className="grid gap-2">
-					<dt className="text-xs uppercase text-[var(--text-muted)]">
-						Tagging
-					</dt>
+					<dt className="text-xs uppercase text-(--text-muted)">Tagging</dt>
 					<dd className="grid gap-2">
 						<button
-							className="rounded bg-[var(--interactive-accent)] px-3 py-2 text-left text-sm font-medium text-[var(--text-on-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+							className="rounded bg-(--interactive-accent) px-3 py-2 text-left text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-50"
 							disabled={!hasApiKey}
 							onClick={onInitializeTagging}
 							type="button"
@@ -65,7 +63,7 @@ export function ExtaggeratedView({
 							Initialize tagging
 						</button>
 						{!hasApiKey ? (
-							<p className="text-xs text-[var(--text-muted)]">
+							<p className="text-xs text-(--text-muted)">
 								Add an OpenRouter API key in settings first.
 							</p>
 						) : null}
@@ -73,13 +71,11 @@ export function ExtaggeratedView({
 				</div>
 				<ActiveNoteSummary freshnessStatus={freshnessStatus} />
 				<div className="grid gap-1">
-					<dt className="text-xs uppercase text-[var(--text-muted)]">
-						Provider
-					</dt>
+					<dt className="text-xs uppercase text-(--text-muted)">Provider</dt>
 					<dd>OpenRouter</dd>
 				</div>
 				<div className="grid gap-1">
-					<dt className="text-xs uppercase text-[var(--text-muted)]">Model</dt>
+					<dt className="text-xs uppercase text-(--text-muted)">Model</dt>
 					<dd className="truncate" title={model}>
 						{model}
 					</dd>

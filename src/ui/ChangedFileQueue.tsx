@@ -33,20 +33,20 @@ export function ChangedFileQueue({
 	).length;
 
 	return (
-		<section className="flex min-h-0 flex-1 flex-col gap-3 border-t border-[var(--background-modifier-border)] pt-3">
+		<section className="flex min-h-0 flex-1 flex-col gap-3 border-t border-(--background-modifier-border) pt-3">
 			<div className="flex items-center justify-between gap-2">
 				<div className="min-w-0">
-					<h2 className="truncate text-xs font-semibold uppercase text-[var(--text-muted)]">
+					<h2 className="truncate text-xs font-semibold uppercase text-(--text-muted)">
 						Changed files
 					</h2>
-					<p className="text-xs text-[var(--text-muted)]">
+					<p className="text-xs text-(--text-muted)">
 						{queueLoading
 							? "Refreshing"
 							: `${changedFiles.length} queued, ${selectedSyncableCount} selected`}
 					</p>
 				</div>
 				<button
-					className="shrink-0 rounded border border-[var(--background-modifier-border)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+					className="shrink-0 rounded border border-(--background-modifier-border) px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
 					disabled={queueLoading}
 					onClick={onRefreshQueue}
 					type="button"
@@ -57,7 +57,7 @@ export function ChangedFileQueue({
 
 			<div className="grid grid-cols-2 gap-2">
 				<button
-					className="rounded bg-[var(--interactive-accent)] px-3 py-2 text-sm font-medium text-[var(--text-on-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+					className="rounded bg-(--interactive-accent) px-3 py-2 text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-50"
 					disabled={!hasApiKey || queueLoading || selectedSyncableCount === 0}
 					onClick={onSyncSelected}
 					type="button"
@@ -65,7 +65,7 @@ export function ChangedFileQueue({
 					Sync selected
 				</button>
 				<button
-					className="rounded border border-[var(--background-modifier-border)] px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+					className="rounded border border-(--background-modifier-border) px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
 					disabled={!hasApiKey || queueLoading || syncableCount === 0}
 					onClick={onSyncAll}
 					type="button"
@@ -76,7 +76,7 @@ export function ChangedFileQueue({
 
 			<div className="min-h-0 overflow-auto">
 				{changedFiles.length === 0 ? (
-					<p className="text-xs text-[var(--text-muted)]">
+					<p className="text-xs text-(--text-muted)">
 						No changed markdown files.
 					</p>
 				) : (
@@ -115,7 +115,7 @@ function ChangedFileQueueRow({
 	const disabled = file.status === "unavailable";
 
 	return (
-		<li className="grid gap-1 border-b border-[var(--background-modifier-border)] pb-2 last:border-b-0">
+		<li className="grid gap-1 border-b border-(--background-modifier-border) pb-2 last:border-b-0">
 			<label className="flex min-w-0 items-start gap-2">
 				<input
 					checked={selected}
@@ -180,7 +180,7 @@ function syncStatusDisplay(status: BatchSyncStatus): {
 	switch (status.type) {
 		case "syncing":
 			return {
-				className: "text-[var(--text-muted)]",
+				className: "text-(--text-muted)",
 				label: "Syncing",
 				title: "Sync in progress.",
 			};
