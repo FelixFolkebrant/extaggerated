@@ -6,6 +6,7 @@ import {
 	ExtaggeratedSettingTab,
 	type ExtaggeratedSettings,
 } from "./settings";
+import { syncActiveNoteTags } from "./noteSync";
 import { mountExtaggeratedView } from "./ui/mount";
 
 const XT_VIEW_TYPE = "extaggerated-view";
@@ -30,6 +31,14 @@ export default class ExtaggeratedPlugin extends Plugin {
 			name: "Open Extaggerated",
 			callback: () => {
 				void this.activateView();
+			},
+		});
+
+		this.addCommand({
+			id: "sync-tags-active-note",
+			name: "Sync tags for active note",
+			callback: () => {
+				void syncActiveNoteTags(this);
 			},
 		});
 
