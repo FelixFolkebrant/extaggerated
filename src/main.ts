@@ -1,4 +1,4 @@
-import { ItemView, Notice, Plugin } from "obsidian";
+import { ItemView, Modal, Notice, Plugin, Setting } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import type { Root } from "react-dom/client";
 import {
@@ -78,6 +78,77 @@ export default class ExtaggeratedPlugin extends Plugin {
 		}
 
 		this.app.workspace.revealLeaf(leaf);
+	}
+
+	async initializeTagging(): Promise<void> {
+		if (this.settings.openRouterApiKey.length === 0) {
+			new Notice("Add an OpenRouter API key before initializing XT tagging.");
+			return;
+		}
+
+		const confirmed = await new OverwriteWarningModal(this.app).openAndWait();
+
+		if (!confirmed) {
+			return;
+		}
+
+		new Notice(
+			"XT tagging initialization confirmed. Changed-note queue comes next.",
+		);
+	}
+}
+
+class OverwriteWarningModal extends Modal {
+	private resolve: ((confirmed: boolean) => void) | null = null;
+	private settled = false;
+
+	openAndWait(): Promise<boolean> {
+		return new Promise((resolve) => {
+			this.resolve = resolve;
+			this.open();
+		});
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+
+		contentEl.createEl("h2", { text: "Initialize XT tagging" });
+		contentEl.createEl("p", {
+			text: "XT will overwrite the native tags property on every processed note.",
+		});
+		contentEl.createEl("p", {
+			text: "This is irreversible unless your vault is backed up or versioned.",
+		});
+
+		new Setting(contentEl)
+			.addButton((button) => {
+				button.setButtonText("Cancel").onClick(() => {
+					this.finish(false);
+				});
+			})
+			.addButton((button) => {
+				button
+					.setButtonText("Continue")
+					.setCta()
+					.onClick(() => {
+						this.finish(true);
+					});
+			});
+	}
+
+	onClose(): void {
+		this.finish(false);
+	}
+
+	private finish(confirmed: boolean): void {
+		if (this.settled) {
+			return;
+		}
+
+		this.settled = true;
+		this.resolve?.(confirmed);
+		this.close();
 	}
 }
 
@@ -166,6 +237,9 @@ class ExtaggeratedPanelView extends ItemView {
 			freshnessStatus: this.freshnessStatus,
 			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
 			model: this.plugin.settings.model,
+			onInitializeTagging: () => {
+				void this.plugin.initializeTagging();
+			},
 		};
 	}
 }
