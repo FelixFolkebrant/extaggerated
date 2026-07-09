@@ -6,8 +6,13 @@ import {
 	ExtaggeratedSettingTab,
 	type ExtaggeratedSettings,
 } from "./settings";
+import { getActiveNoteFreshness, type FreshnessStatus } from "./freshness";
 import { syncActiveNoteTags } from "./noteSync";
-import { mountExtaggeratedView } from "./ui/mount";
+import {
+	mountExtaggeratedView,
+	renderExtaggeratedView,
+	type ExtaggeratedViewState,
+} from "./ui/mount";
 
 const XT_VIEW_TYPE = "extaggerated-view";
 
@@ -78,6 +83,8 @@ export default class ExtaggeratedPlugin extends Plugin {
 
 class ExtaggeratedPanelView extends ItemView {
 	private root: Root | null = null;
+	private freshnessStatus: FreshnessStatus = { type: "no-note" };
+	private refreshId = 0;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -103,13 +110,62 @@ class ExtaggeratedPanelView extends ItemView {
 		const container = this.contentEl.createDiv();
 		this.root = mountExtaggeratedView({
 			container,
-			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
-			model: this.plugin.settings.model,
+			...this.viewState(),
 		});
+
+		this.registerEvent(
+			this.app.workspace.on("file-open", () => {
+				void this.refreshFreshness();
+			}),
+		);
+		this.registerEvent(
+			this.app.vault.on("modify", (file) => {
+				if (file === this.app.workspace.getActiveFile()) {
+					void this.refreshFreshness();
+				}
+			}),
+		);
+		this.registerEvent(
+			this.app.metadataCache.on("changed", (file) => {
+				if (file === this.app.workspace.getActiveFile()) {
+					void this.refreshFreshness();
+				}
+			}),
+		);
+
+		await this.refreshFreshness();
 	}
 
 	async onClose(): Promise<void> {
 		this.root?.unmount();
 		this.root = null;
+	}
+
+	private async refreshFreshness(): Promise<void> {
+		const refreshId = ++this.refreshId;
+		const freshnessStatus = await getActiveNoteFreshness(this.plugin);
+
+		if (refreshId !== this.refreshId) {
+			return;
+		}
+
+		this.freshnessStatus = freshnessStatus;
+		this.render();
+	}
+
+	private render(): void {
+		if (!this.root) {
+			return;
+		}
+
+		renderExtaggeratedView(this.root, this.viewState());
+	}
+
+	private viewState(): ExtaggeratedViewState {
+		return {
+			freshnessStatus: this.freshnessStatus,
+			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
+			model: this.plugin.settings.model,
+		};
 	}
 }
