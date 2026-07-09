@@ -4,12 +4,14 @@ interface ExtaggeratedViewProps {
 	freshnessStatus: FreshnessStatus;
 	hasApiKey: boolean;
 	model: string;
+	onInitializeTagging: () => void;
 }
 
 export function ExtaggeratedView({
 	freshnessStatus,
 	hasApiKey,
 	model,
+	onInitializeTagging,
 }: ExtaggeratedViewProps) {
 	const freshness = freshnessDisplay(freshnessStatus);
 
@@ -32,6 +34,26 @@ export function ExtaggeratedView({
 			</header>
 
 			<dl className="grid gap-3">
+				<div className="grid gap-2">
+					<dt className="text-xs uppercase text-[var(--text-muted)]">
+						Tagging
+					</dt>
+					<dd className="grid gap-2">
+						<button
+							className="rounded bg-[var(--interactive-accent)] px-3 py-2 text-left text-sm font-medium text-[var(--text-on-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+							disabled={!hasApiKey}
+							onClick={onInitializeTagging}
+							type="button"
+						>
+							Initialize tagging
+						</button>
+						{!hasApiKey ? (
+							<p className="text-xs text-[var(--text-muted)]">
+								Add an OpenRouter API key in settings first.
+							</p>
+						) : null}
+					</dd>
+				</div>
 				<div className="grid gap-1">
 					<dt className="text-xs uppercase text-[var(--text-muted)]">
 						Active note

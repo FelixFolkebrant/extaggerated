@@ -7,6 +7,7 @@ export interface ExtaggeratedViewState {
 	hasApiKey: boolean;
 	freshnessStatus: FreshnessStatus;
 	model: string;
+	onInitializeTagging: () => void;
 }
 
 interface MountExtaggeratedViewOptions extends ExtaggeratedViewState {
@@ -24,7 +25,12 @@ export function mountExtaggeratedView({
 
 export function renderExtaggeratedView(
 	root: Root,
-	{ freshnessStatus, hasApiKey, model }: ExtaggeratedViewState,
+	{
+		freshnessStatus,
+		hasApiKey,
+		model,
+		onInitializeTagging,
+	}: ExtaggeratedViewState,
 ): void {
 	root.render(
 		<StrictMode>
@@ -32,6 +38,7 @@ export function renderExtaggeratedView(
 				freshnessStatus={freshnessStatus}
 				hasApiKey={hasApiKey}
 				model={model}
+				onInitializeTagging={onInitializeTagging}
 			/>
 		</StrictMode>,
 	);
