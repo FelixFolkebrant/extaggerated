@@ -34,13 +34,13 @@ export function ExtaggeratedView({
 }: ExtaggeratedViewProps) {
 	return (
 		<section className="xt-view flex h-full flex-col gap-4 overflow-hidden p-4 text-sm text-(--text-normal)">
-			<header className="flex items-center justify-between border-b border-(--background-modifier-border) pb-3">
+			<header className="grid justify-items-start gap-1 border-b border-(--background-modifier-border) pb-3">
 				<div className="min-w-0">
 					<h1 className="truncate text-base font-semibold">Extaggerated</h1>
 					<p className="text-xs text-(--text-muted)">XT</p>
 				</div>
 				<span
-					className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
+					className={`rounded px-2 py-1 text-xs font-medium ${
 						hasApiKey
 							? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
 							: "bg-amber-500/15 text-amber-700 dark:text-amber-300"
@@ -53,7 +53,7 @@ export function ExtaggeratedView({
 			<dl className="grid gap-3">
 				<div className="grid gap-2">
 					<dt className="text-xs uppercase text-(--text-muted)">Tagging</dt>
-					<dd className="grid gap-2">
+					<dd className="m-0 grid gap-2">
 						<button
 							className="rounded bg-(--interactive-accent) px-3 py-2 text-left text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-50"
 							disabled={!hasApiKey}
@@ -72,11 +72,11 @@ export function ExtaggeratedView({
 				<ActiveNoteSummary freshnessStatus={freshnessStatus} />
 				<div className="grid gap-1">
 					<dt className="text-xs uppercase text-(--text-muted)">Provider</dt>
-					<dd>OpenRouter</dd>
+					<dd className="m-0">OpenRouter</dd>
 				</div>
 				<div className="grid gap-1">
 					<dt className="text-xs uppercase text-(--text-muted)">Model</dt>
-					<dd className="truncate" title={model}>
+					<dd className="m-0 truncate" title={model}>
 						{model}
 					</dd>
 				</div>

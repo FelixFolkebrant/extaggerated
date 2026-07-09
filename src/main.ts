@@ -28,6 +28,8 @@ export type BatchSyncStatus =
 
 export default class ExtaggeratedPlugin extends Plugin {
 	settings: ExtaggeratedSettings = DEFAULT_SETTINGS;
+	private headerIndicatorEl: HTMLElement | null = null;
+	private headerRefreshId = 0;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -57,7 +59,22 @@ export default class ExtaggeratedPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "ignore-active-note",
+			name: "Ignore active note",
+			callback: () => {
+				void this.ignoreActiveNote();
+			},
+		});
+
 		this.addSettingTab(new ExtaggeratedSettingTab(this.app, this));
+
+		this.registerHeaderSyncIndicator();
+	}
+
+	onunload(): void {
+		this.headerIndicatorEl?.remove();
+		this.headerIndicatorEl = null;
 	}
 
 	async loadSettings(): Promise<void> {
@@ -72,20 +89,21 @@ export default class ExtaggeratedPlugin extends Plugin {
 	}
 
 	private async activateView(): Promise<void> {
-		const existingLeaf = this.app.workspace.getLeavesOfType(XT_VIEW_TYPE)[0];
-		const leaf = existingLeaf ?? this.app.workspace.getRightLeaf(false);
+		for (const leaf of this.app.workspace.getLeavesOfType(XT_VIEW_TYPE)) {
+			leaf.detach();
+		}
+
+		const leaf = this.app.workspace.getLeftLeaf(false);
 
 		if (!leaf) {
 			new Notice("Could not open Extaggerated.");
 			return;
 		}
 
-		if (!existingLeaf) {
-			await leaf.setViewState({
-				active: true,
-				type: XT_VIEW_TYPE,
-			});
-		}
+		await leaf.setViewState({
+			active: true,
+			type: XT_VIEW_TYPE,
+		});
 
 		this.app.workspace.revealLeaf(leaf);
 	}
@@ -105,6 +123,121 @@ export default class ExtaggeratedPlugin extends Plugin {
 		new Notice(
 			"XT tagging initialization confirmed. Changed-note queue comes next.",
 		);
+	}
+
+	private async ignoreActiveNote(): Promise<void> {
+		const file = this.app.workspace.getActiveFile();
+
+		if (!file || file.extension !== "md") {
+			new Notice("Open a markdown note before ignoring it.");
+			return;
+		}
+
+		await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			frontmatter.xt_ignore = true;
+		});
+		await this.refreshHeaderSyncIndicator();
+
+		new Notice(`XT will ignore ${file.basename}.`);
+	}
+
+	private registerHeaderSyncIndicator(): void {
+		const refresh = () => {
+			void this.refreshHeaderSyncIndicator();
+		};
+
+		this.app.workspace.onLayoutReady(refresh);
+		this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
+		this.registerEvent(this.app.workspace.on("file-open", refresh));
+		this.registerEvent(this.app.workspace.on("layout-change", refresh));
+		this.registerEvent(
+			this.app.vault.on("modify", (file) => {
+				if (file === this.app.workspace.getActiveFile()) {
+					refresh();
+				}
+			}),
+		);
+		this.registerEvent(
+			this.app.metadataCache.on("changed", (file) => {
+				if (file === this.app.workspace.getActiveFile()) {
+					refresh();
+				}
+			}),
+		);
+	}
+
+	private async refreshHeaderSyncIndicator(): Promise<void> {
+		const refreshId = ++this.headerRefreshId;
+		const freshnessStatus = await getActiveNoteFreshness(this);
+
+		if (refreshId !== this.headerRefreshId) {
+			return;
+		}
+
+		this.renderHeaderSyncIndicator(freshnessStatus);
+	}
+
+	private renderHeaderSyncIndicator(status: FreshnessStatus): void {
+		this.headerIndicatorEl?.remove();
+		this.headerIndicatorEl = null;
+
+		if (status.type === "no-note") {
+			return;
+		}
+
+		const actionsEl =
+			this.app.workspace.activeLeaf?.view.containerEl.querySelector(
+				".view-header .view-actions",
+			);
+
+		if (!actionsEl) {
+			return;
+		}
+
+		const display = headerSyncIndicatorDisplay(status);
+		const indicatorEl = document.createElement("span");
+		indicatorEl.className = `xt-sync-indicator xt-sync-indicator--${status.type}`;
+		indicatorEl.textContent = "XT";
+		indicatorEl.setAttribute("aria-label", display.label);
+		indicatorEl.setAttribute("title", display.title);
+
+		actionsEl.prepend(indicatorEl);
+		this.headerIndicatorEl = indicatorEl;
+	}
+}
+
+function headerSyncIndicatorDisplay(
+	status: Exclude<FreshnessStatus, { type: "no-note" }>,
+): {
+	label: string;
+	title: string;
+} {
+	switch (status.type) {
+		case "fresh":
+			return {
+				label: "XT synced",
+				title: "XT tags match the current note body.",
+			};
+		case "ignored":
+			return {
+				label: "XT ignored",
+				title: "XT ignores this note because xt_ignore is enabled.",
+			};
+		case "stale":
+			return {
+				label: "XT modified since sync",
+				title: "The note body changed after the last XT tag sync.",
+			};
+		case "untagged":
+			return {
+				label: "XT never synced",
+				title: "No XT content hash is stored on this note.",
+			};
+		case "unavailable":
+			return {
+				label: "XT unavailable",
+				title: status.message,
+			};
 	}
 }
 
