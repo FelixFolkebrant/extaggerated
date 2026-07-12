@@ -1,10 +1,10 @@
 import { Notice, Plugin } from "obsidian";
+import { syncActiveNoteTags } from "./noteSync";
 import {
 	DEFAULT_SETTINGS,
-	ExtaggeratedSettingTab,
 	type ExtaggeratedSettings,
+	ExtaggeratedSettingTab,
 } from "./settings";
-import { syncActiveNoteTags } from "./noteSync";
 import {
 	ExtaggeratedPanelView,
 	XT_VIEW_TYPE,
@@ -108,7 +108,7 @@ export default class ExtaggeratedPlugin extends Plugin {
 	private async ignoreActiveNote(): Promise<void> {
 		const file = this.app.workspace.getActiveFile();
 
-		if (!file || file.extension !== "md") {
+		if (file?.extension !== "md") {
 			new Notice("Open a markdown note before ignoring it.");
 			return;
 		}

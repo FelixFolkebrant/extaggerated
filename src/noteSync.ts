@@ -1,5 +1,5 @@
-import { Notice } from "obsidian";
 import type { TFile } from "obsidian";
+import { Notice } from "obsidian";
 import type ExtaggeratedPlugin from "./main";
 import { generateTags, hashNoteBody, noteBodyForHash } from "./tagging";
 
@@ -12,7 +12,7 @@ export async function syncActiveNoteTags(
 ): Promise<void> {
 	const file = plugin.app.workspace.getActiveFile();
 
-	if (!file || file.extension !== "md") {
+	if (file?.extension !== "md") {
 		new Notice("Open a markdown note before syncing XT tags.");
 		return;
 	}

@@ -32,7 +32,7 @@ export function ExtaggeratedView({
 	syncStatuses,
 }: ExtaggeratedViewProps) {
 	return (
-		<section className="xt-view flex h-full flex-col gap-4 overflow-hidden p-4 text-sm text-(--text-normal)">
+		<section className="flex h-full flex-col gap-4 overflow-hidden p-4 font-(family-name:--font-interface) text-sm text-(--text-normal)">
 			<header className="grid justify-items-start gap-1 border-b border-(--background-modifier-border) pb-3">
 				<div className="min-w-0">
 					<h1 className="truncate text-base font-semibold">Extaggerated</h1>

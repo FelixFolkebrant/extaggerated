@@ -27,7 +27,7 @@ export async function getActiveNoteFreshness(
 ): Promise<FreshnessStatus> {
 	const file = plugin.app.workspace.getActiveFile();
 
-	if (!file || file.extension !== "md") {
+	if (file?.extension !== "md") {
 		return { type: "no-note" };
 	}
 
