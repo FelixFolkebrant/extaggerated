@@ -1,7 +1,6 @@
-import type { BatchSyncStatus } from "../main";
 import type { ChangedFileQueueItem, FreshnessStatus } from "../freshness";
 import { ActiveNoteSummary } from "./ActiveNoteSummary";
-import { ChangedFileQueue } from "./ChangedFileQueue";
+import { type BatchSyncStatus, ChangedFileQueue } from "./ChangedFileQueue";
 
 interface ExtaggeratedViewProps {
 	changedFiles: ChangedFileQueueItem[];

@@ -1,5 +1,9 @@
-import type { BatchSyncStatus } from "../main";
 import type { ChangedFileQueueItem } from "../freshness";
+
+export type BatchSyncStatus =
+	| { type: "syncing" }
+	| { type: "synced"; message: string }
+	| { type: "failed"; message: string };
 
 interface ChangedFileQueueProps {
 	changedFiles: ChangedFileQueueItem[];

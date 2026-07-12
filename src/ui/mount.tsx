@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ExtaggeratedView } from "./ExtaggeratedView";
 import type { ChangedFileQueueItem, FreshnessStatus } from "../freshness";
-import type { BatchSyncStatus } from "../main";
+import type { BatchSyncStatus } from "./ChangedFileQueue";
 
 export interface ExtaggeratedViewState {
 	changedFiles: ChangedFileQueueItem[];
