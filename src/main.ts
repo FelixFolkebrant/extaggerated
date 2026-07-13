@@ -1,33 +1,20 @@
-import { ItemView, Modal, Notice, Plugin, Setting } from "obsidian";
-import type { WorkspaceLeaf } from "obsidian";
-import type { Root } from "react-dom/client";
+import { Notice, Plugin } from "obsidian";
+import { syncActiveNoteTags } from "./noteSync";
 import {
 	DEFAULT_SETTINGS,
-	ExtaggeratedSettingTab,
 	type ExtaggeratedSettings,
+	ExtaggeratedSettingTab,
 } from "./settings";
 import {
-	getActiveNoteFreshness,
-	getChangedFileQueue,
-	type ChangedFileQueueItem,
-	type FreshnessStatus,
-} from "./freshness";
-import { syncActiveNoteTags, syncNoteTags } from "./noteSync";
-import {
-	mountExtaggeratedView,
-	renderExtaggeratedView,
-	type ExtaggeratedViewState,
-} from "./ui/mount";
-
-const XT_VIEW_TYPE = "extaggerated-view";
-
-export type BatchSyncStatus =
-	| { type: "syncing" }
-	| { type: "synced"; message: string }
-	| { type: "failed"; message: string };
+	ExtaggeratedPanelView,
+	XT_VIEW_TYPE,
+} from "./ui/ExtaggeratedPanelView";
+import { registerHeaderSyncIndicator } from "./ui/headerSyncIndicator";
+import { OverwriteWarningModal } from "./ui/OverwriteWarningModal";
 
 export default class ExtaggeratedPlugin extends Plugin {
 	settings: ExtaggeratedSettings = DEFAULT_SETTINGS;
+	private refreshHeaderSyncIndicator: (() => Promise<void>) | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -57,7 +44,17 @@ export default class ExtaggeratedPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "ignore-active-note",
+			name: "Ignore active note",
+			callback: () => {
+				void this.ignoreActiveNote();
+			},
+		});
+
 		this.addSettingTab(new ExtaggeratedSettingTab(this.app, this));
+
+		this.refreshHeaderSyncIndicator = registerHeaderSyncIndicator(this);
 	}
 
 	async loadSettings(): Promise<void> {
@@ -72,20 +69,21 @@ export default class ExtaggeratedPlugin extends Plugin {
 	}
 
 	private async activateView(): Promise<void> {
-		const existingLeaf = this.app.workspace.getLeavesOfType(XT_VIEW_TYPE)[0];
-		const leaf = existingLeaf ?? this.app.workspace.getRightLeaf(false);
+		for (const leaf of this.app.workspace.getLeavesOfType(XT_VIEW_TYPE)) {
+			leaf.detach();
+		}
+
+		const leaf = this.app.workspace.getLeftLeaf(false);
 
 		if (!leaf) {
 			new Notice("Could not open Extaggerated.");
 			return;
 		}
 
-		if (!existingLeaf) {
-			await leaf.setViewState({
-				active: true,
-				type: XT_VIEW_TYPE,
-			});
-		}
+		await leaf.setViewState({
+			active: true,
+			type: XT_VIEW_TYPE,
+		});
 
 		this.app.workspace.revealLeaf(leaf);
 	}
@@ -106,266 +104,20 @@ export default class ExtaggeratedPlugin extends Plugin {
 			"XT tagging initialization confirmed. Changed-note queue comes next.",
 		);
 	}
-}
 
-class OverwriteWarningModal extends Modal {
-	private resolve: ((confirmed: boolean) => void) | null = null;
-	private settled = false;
+	private async ignoreActiveNote(): Promise<void> {
+		const file = this.app.workspace.getActiveFile();
 
-	openAndWait(): Promise<boolean> {
-		return new Promise((resolve) => {
-			this.resolve = resolve;
-			this.open();
+		if (file?.extension !== "md") {
+			new Notice("Open a markdown note before ignoring it.");
+			return;
+		}
+
+		await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			frontmatter.xt_ignore = true;
 		});
-	}
+		await this.refreshHeaderSyncIndicator?.();
 
-	onOpen(): void {
-		const { contentEl } = this;
-		contentEl.empty();
-
-		contentEl.createEl("h2", { text: "Initialize XT tagging" });
-		contentEl.createEl("p", {
-			text: "XT will overwrite the native tags property on every processed note.",
-		});
-		contentEl.createEl("p", {
-			text: "This is irreversible unless your vault is backed up or versioned.",
-		});
-
-		new Setting(contentEl)
-			.addButton((button) => {
-				button.setButtonText("Cancel").onClick(() => {
-					this.finish(false);
-				});
-			})
-			.addButton((button) => {
-				button
-					.setButtonText("Continue")
-					.setCta()
-					.onClick(() => {
-						this.finish(true);
-					});
-			});
-	}
-
-	onClose(): void {
-		this.finish(false);
-	}
-
-	private finish(confirmed: boolean): void {
-		if (this.settled) {
-			return;
-		}
-
-		this.settled = true;
-		this.resolve?.(confirmed);
-		this.close();
-	}
-}
-
-class ExtaggeratedPanelView extends ItemView {
-	private changedFiles: ChangedFileQueueItem[] = [];
-	private root: Root | null = null;
-	private freshnessStatus: FreshnessStatus = { type: "no-note" };
-	private freshnessRefreshId = 0;
-	private queueLoading = false;
-	private queueRefreshId = 0;
-	private selectedPaths = new Set<string>();
-	private syncStatuses: Record<string, BatchSyncStatus> = {};
-
-	constructor(
-		leaf: WorkspaceLeaf,
-		private readonly plugin: ExtaggeratedPlugin,
-	) {
-		super(leaf);
-	}
-
-	getViewType(): string {
-		return XT_VIEW_TYPE;
-	}
-
-	getDisplayText(): string {
-		return "Extaggerated";
-	}
-
-	getIcon(): string {
-		return "tags";
-	}
-
-	async onOpen(): Promise<void> {
-		this.contentEl.empty();
-		const container = this.contentEl.createDiv();
-		this.root = mountExtaggeratedView({
-			container,
-			...this.viewState(),
-		});
-
-		this.registerEvent(
-			this.app.workspace.on("file-open", () => {
-				void this.refreshFreshness();
-			}),
-		);
-		this.registerEvent(
-			this.app.vault.on("modify", (file) => {
-				if (file === this.app.workspace.getActiveFile()) {
-					void this.refreshFreshness();
-				}
-			}),
-		);
-		this.registerEvent(
-			this.app.metadataCache.on("changed", (file) => {
-				if (file === this.app.workspace.getActiveFile()) {
-					void this.refreshFreshness();
-				}
-			}),
-		);
-
-		await this.refreshFreshness();
-		await this.refreshQueue();
-	}
-
-	async onClose(): Promise<void> {
-		this.root?.unmount();
-		this.root = null;
-	}
-
-	private async refreshFreshness(): Promise<void> {
-		const refreshId = ++this.freshnessRefreshId;
-		const freshnessStatus = await getActiveNoteFreshness(this.plugin);
-
-		if (refreshId !== this.freshnessRefreshId) {
-			return;
-		}
-
-		this.freshnessStatus = freshnessStatus;
-		this.render();
-	}
-
-	private render(): void {
-		if (!this.root) {
-			return;
-		}
-
-		renderExtaggeratedView(this.root, this.viewState());
-	}
-
-	private viewState(): ExtaggeratedViewState {
-		return {
-			changedFiles: this.changedFiles,
-			freshnessStatus: this.freshnessStatus,
-			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
-			model: this.plugin.settings.model,
-			onInitializeTagging: () => {
-				void this.plugin.initializeTagging();
-			},
-			onRefreshQueue: () => {
-				void this.refreshQueue();
-			},
-			onSyncAll: () => {
-				void this.syncQueuedFiles(this.syncableQueuePaths());
-			},
-			onSyncSelected: () => {
-				void this.syncQueuedFiles(
-					this.syncableQueuePaths().filter((path) =>
-						this.selectedPaths.has(path),
-					),
-				);
-			},
-			onToggleQueuedFile: (path) => {
-				this.toggleQueuedFile(path);
-			},
-			queueLoading: this.queueLoading,
-			selectedPaths: [...this.selectedPaths],
-			syncStatuses: this.syncStatuses,
-		};
-	}
-
-	private async refreshQueue(): Promise<void> {
-		const refreshId = ++this.queueRefreshId;
-		this.queueLoading = true;
-		this.render();
-
-		const changedFiles = await getChangedFileQueue(this.plugin);
-
-		if (refreshId !== this.queueRefreshId) {
-			return;
-		}
-
-		this.changedFiles = changedFiles;
-		this.queueLoading = false;
-		this.selectedPaths = new Set(
-			[...this.selectedPaths].filter((path) =>
-				this.changedFiles.some((file) => file.path === path),
-			),
-		);
-		this.render();
-	}
-
-	private toggleQueuedFile(path: string): void {
-		if (this.selectedPaths.has(path)) {
-			this.selectedPaths.delete(path);
-		} else {
-			this.selectedPaths.add(path);
-		}
-
-		this.render();
-	}
-
-	private syncableQueuePaths(): string[] {
-		return this.changedFiles
-			.filter((file) => file.status !== "unavailable")
-			.map((file) => file.path);
-	}
-
-	private async syncQueuedFiles(paths: string[]): Promise<void> {
-		if (paths.length === 0) {
-			new Notice("Select at least one queued note to sync.");
-			return;
-		}
-
-		if (this.plugin.settings.openRouterApiKey.length === 0) {
-			new Notice("Add an OpenRouter API key before syncing XT tags.");
-			return;
-		}
-
-		for (const path of paths) {
-			const file = this.plugin.app.vault.getFileByPath(path);
-
-			if (!file) {
-				this.syncStatuses = {
-					...this.syncStatuses,
-					[path]: { message: "File no longer exists.", type: "failed" },
-				};
-				this.render();
-				continue;
-			}
-
-			this.syncStatuses = {
-				...this.syncStatuses,
-				[path]: { type: "syncing" },
-			};
-			this.render();
-
-			try {
-				const result = await syncNoteTags(this.plugin, file);
-				this.syncStatuses = {
-					...this.syncStatuses,
-					[path]: {
-						message: `${result.tagCount} tags`,
-						type: "synced",
-					},
-				};
-			} catch (error) {
-				this.syncStatuses = {
-					...this.syncStatuses,
-					[path]: {
-						message: error instanceof Error ? error.message : String(error),
-						type: "failed",
-					},
-				};
-			}
-			this.render();
-		}
-
-		await this.refreshQueue();
+		new Notice(`XT will ignore ${file.basename}.`);
 	}
 }

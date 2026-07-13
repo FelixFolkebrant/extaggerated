@@ -4,6 +4,7 @@ import { hashNoteBody } from "./tagging";
 
 export type FreshnessStatus =
 	| { type: "no-note" }
+	| { type: "ignored"; fileName: string }
 	| { type: "untagged"; fileName: string }
 	| { type: "fresh"; fileName: string }
 	| { type: "stale"; fileName: string }
@@ -11,7 +12,7 @@ export type FreshnessStatus =
 
 export type QueueFreshnessStatus = Exclude<
 	FreshnessStatus,
-	{ type: "no-note" }
+	{ type: "ignored" } | { type: "no-note" }
 >;
 
 export interface ChangedFileQueueItem {
@@ -26,8 +27,12 @@ export async function getActiveNoteFreshness(
 ): Promise<FreshnessStatus> {
 	const file = plugin.app.workspace.getActiveFile();
 
-	if (!file || file.extension !== "md") {
+	if (file?.extension !== "md") {
 		return { type: "no-note" };
+	}
+
+	if (frontmatterIgnored(plugin, file)) {
+		return { fileName: file.basename, type: "ignored" };
 	}
 
 	return getFileFreshness(plugin, file);
@@ -91,4 +96,10 @@ function frontmatterHash(
 		plugin.app.metadataCache.getFileCache(file)?.frontmatter?.xt_content_hash;
 
 	return typeof hash === "string" && hash.length > 0 ? hash : null;
+}
+
+function frontmatterIgnored(plugin: ExtaggeratedPlugin, file: TFile): boolean {
+	return (
+		plugin.app.metadataCache.getFileCache(file)?.frontmatter?.xt_ignore === true
+	);
 }

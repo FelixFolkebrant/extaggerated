@@ -10,12 +10,12 @@ export function ActiveNoteSummary({ freshnessStatus }: ActiveNoteSummaryProps) {
 	return (
 		<div className="grid gap-1">
 			<dt className="text-xs uppercase text-(--text-muted)">Active note</dt>
-			<dd className="flex items-center justify-between gap-3">
+			<dd className="m-0 grid justify-items-start gap-1">
 				<span className="min-w-0 truncate" title={freshness.note}>
 					{freshness.note}
 				</span>
 				<span
-					className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${freshness.className}`}
+					className={`rounded px-2 py-1 text-xs font-medium ${freshness.className}`}
 					title={freshness.title}
 				>
 					{freshness.label}
@@ -32,6 +32,13 @@ function freshnessDisplay(status: FreshnessStatus): {
 	title: string;
 } {
 	switch (status.type) {
+		case "ignored":
+			return {
+				className: "bg-(--background-modifier-border) text-(--text-muted)",
+				label: "Ignored",
+				note: status.fileName,
+				title: "This note has xt_ignore enabled.",
+			};
 		case "fresh":
 			return {
 				className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
@@ -48,7 +55,7 @@ function freshnessDisplay(status: FreshnessStatus): {
 			};
 		case "untagged":
 			return {
-				className: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+				className: "bg-red-500/15 text-red-700 dark:text-red-300",
 				label: "Untagged",
 				note: status.fileName,
 				title: "No XT content hash is stored on this note.",

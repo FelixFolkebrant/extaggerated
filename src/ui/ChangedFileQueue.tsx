@@ -1,5 +1,9 @@
-import type { BatchSyncStatus } from "../main";
 import type { ChangedFileQueueItem } from "../freshness";
+
+export type BatchSyncStatus =
+	| { type: "syncing" }
+	| { type: "synced"; message: string }
+	| { type: "failed"; message: string };
 
 interface ChangedFileQueueProps {
 	changedFiles: ChangedFileQueueItem[];
@@ -34,7 +38,7 @@ export function ChangedFileQueue({
 
 	return (
 		<section className="flex min-h-0 flex-1 flex-col gap-3 border-t border-(--background-modifier-border) pt-3">
-			<div className="flex items-center justify-between gap-2">
+			<div className="grid justify-items-start gap-2">
 				<div className="min-w-0">
 					<h2 className="truncate text-xs font-semibold uppercase text-(--text-muted)">
 						Changed files
@@ -46,7 +50,7 @@ export function ChangedFileQueue({
 					</p>
 				</div>
 				<button
-					className="shrink-0 rounded border border-(--background-modifier-border) px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+					className="rounded border border-(--background-modifier-border) px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
 					disabled={queueLoading}
 					onClick={onRefreshQueue}
 					type="button"
