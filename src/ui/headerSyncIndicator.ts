@@ -1,8 +1,9 @@
 import type ExtaggeratedPlugin from "../main";
 import { getActiveNoteFreshness, type FreshnessStatus } from "../freshness";
+import { renderXtMark } from "./XtMark";
 
 const indicatorClassName =
-	"me-(--size-2-1) inline-flex h-(--clickable-icon-size) min-w-(--clickable-icon-size) items-center justify-center rounded-full text-(length:--font-ui-smaller) font-semibold";
+	"me-(--size-2-1) inline-flex h-(--clickable-icon-size) min-w-(--clickable-icon-size) items-center justify-center [&>svg]:w-6";
 
 export function registerHeaderSyncIndicator(
 	plugin: ExtaggeratedPlugin,
@@ -14,7 +15,7 @@ export function registerHeaderSyncIndicator(
 		indicatorEl?.remove();
 		indicatorEl = null;
 
-		if (status.type === "no-note") {
+		if (status.type === "no-note" || status.type === "ignored") {
 			return;
 		}
 
@@ -30,7 +31,7 @@ export function registerHeaderSyncIndicator(
 		const display = headerSyncIndicatorDisplay(status);
 		indicatorEl = document.createElement("span");
 		indicatorEl.className = `${indicatorClassName} ${display.className}`;
-		indicatorEl.textContent = "XT";
+		renderXtMark(indicatorEl);
 		indicatorEl.setAttribute("aria-label", display.label);
 		indicatorEl.setAttribute("title", display.title);
 
@@ -87,27 +88,27 @@ function headerSyncIndicatorDisplay(
 	switch (status.type) {
 		case "fresh":
 			return {
-				className: "bg-(--color-green)/18 text-(--color-green)",
-				label: "XT synced",
+				className: "text-(--interactive-accent)",
+				label: "XT tagged",
 				title: "XT tags match the current note body.",
-			};
-		case "ignored":
-			return {
-				className: "bg-(--background-modifier-border) text-(--text-muted)",
-				label: "XT ignored",
-				title: "XT ignores this note because xt_ignore is enabled.",
 			};
 		case "stale":
 			return {
-				className: "bg-(--color-yellow)/18 text-(--color-yellow)",
+				className: "text-(--interactive-accent) opacity-40",
 				label: "XT modified since sync",
 				title: "The note body changed after the last XT tag sync.",
 			};
 		case "untagged":
 			return {
-				className: "bg-(--color-red)/18 text-(--color-red)",
+				className: "text-(--text-muted)",
 				label: "XT never synced",
 				title: "No XT content hash is stored on this note.",
+			};
+		case "ignored":
+			return {
+				className: "",
+				label: "XT ignored",
+				title: "XT ignores this note because xt_ignore is enabled.",
 			};
 		case "unavailable":
 			return {
