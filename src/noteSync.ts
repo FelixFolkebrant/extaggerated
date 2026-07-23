@@ -1,5 +1,6 @@
 import type { TFile } from "obsidian";
 import { Notice } from "obsidian";
+import { isFileIgnored } from "./freshness";
 import type ExtaggeratedPlugin from "./main";
 import { generateTags, hashNoteBody, noteBodyForHash } from "./tagging";
 
@@ -14,6 +15,11 @@ export async function syncActiveNoteTags(
 
 	if (file?.extension !== "md") {
 		new Notice("Open a markdown note before syncing XT tags.");
+		return;
+	}
+
+	if (isFileIgnored(plugin, file)) {
+		new Notice(`${file.basename} is ignored by XT.`);
 		return;
 	}
 
@@ -43,6 +49,10 @@ export async function syncNoteTags(
 	plugin: ExtaggeratedPlugin,
 	file: TFile,
 ): Promise<SyncNoteTagsResult> {
+	if (isFileIgnored(plugin, file)) {
+		throw new Error(`${file.basename} is ignored by XT.`);
+	}
+
 	if (plugin.settings.openRouterApiKey.length === 0) {
 		throw new Error("Add an OpenRouter API key before syncing XT tags.");
 	}
