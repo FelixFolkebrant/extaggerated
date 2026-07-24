@@ -27,6 +27,7 @@ export class ExtaggeratedPanelView extends ItemView {
 	private selectedPaths = new Set<string>();
 	private sortAscending = true;
 	private syncStatuses: Record<string, BatchSyncStatus> = {};
+	private taggingPaths = new Set<string>();
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -104,6 +105,7 @@ export class ExtaggeratedPanelView extends ItemView {
 			selectedPaths: [...this.selectedPaths],
 			sortAscending: this.sortAscending,
 			syncStatuses: this.syncStatuses,
+			taggingPaths: [...this.taggingPaths],
 		};
 	}
 
@@ -173,45 +175,53 @@ export class ExtaggeratedPanelView extends ItemView {
 			return;
 		}
 
-		for (const path of paths) {
-			const file = this.plugin.app.vault.getFileByPath(path);
+		this.taggingPaths = new Set(paths);
+		this.render();
 
-			if (!file) {
+		try {
+			for (const path of paths) {
+				const file = this.plugin.app.vault.getFileByPath(path);
+
+				if (!file) {
+					this.syncStatuses = {
+						...this.syncStatuses,
+						[path]: { message: "File no longer exists.", type: "failed" },
+					};
+					this.render();
+					continue;
+				}
+
 				this.syncStatuses = {
 					...this.syncStatuses,
-					[path]: { message: "File no longer exists.", type: "failed" },
+					[path]: { type: "syncing" },
 				};
 				this.render();
-				continue;
+
+				try {
+					const result = await syncNoteTags(this.plugin, file);
+					this.syncStatuses = {
+						...this.syncStatuses,
+						[path]: {
+							message: `${result.tagCount} tags`,
+							type: "synced",
+						},
+					};
+				} catch (error) {
+					this.syncStatuses = {
+						...this.syncStatuses,
+						[path]: {
+							message: error instanceof Error ? error.message : String(error),
+							type: "failed",
+						},
+					};
+				}
+				this.render();
 			}
 
-			this.syncStatuses = {
-				...this.syncStatuses,
-				[path]: { type: "syncing" },
-			};
-			this.render();
-
-			try {
-				const result = await syncNoteTags(this.plugin, file);
-				this.syncStatuses = {
-					...this.syncStatuses,
-					[path]: {
-						message: `${result.tagCount} tags`,
-						type: "synced",
-					},
-				};
-			} catch (error) {
-				this.syncStatuses = {
-					...this.syncStatuses,
-					[path]: {
-						message: error instanceof Error ? error.message : String(error),
-						type: "failed",
-					},
-				};
-			}
+			await this.refreshQueue();
+		} finally {
+			this.taggingPaths.clear();
 			this.render();
 		}
-
-		await this.refreshQueue();
 	}
 }

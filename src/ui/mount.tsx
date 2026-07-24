@@ -18,6 +18,7 @@ export interface ExtaggeratedViewState {
 	selectedPaths: string[];
 	sortAscending: boolean;
 	syncStatuses: Record<string, BatchSyncStatus>;
+	taggingPaths: string[];
 }
 
 interface MountExtaggeratedViewOptions extends ExtaggeratedViewState {

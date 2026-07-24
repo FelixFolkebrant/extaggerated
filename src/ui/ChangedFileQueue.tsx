@@ -20,6 +20,7 @@ interface ChangedFileQueueProps {
 	selectedPaths: string[];
 	sortAscending: boolean;
 	syncStatuses: Record<string, BatchSyncStatus>;
+	taggingPaths: string[];
 }
 
 export function ChangedFileQueue({
@@ -36,22 +37,24 @@ export function ChangedFileQueue({
 	selectedPaths,
 	sortAscending,
 	syncStatuses,
+	taggingPaths,
 }: ChangedFileQueueProps) {
 	const selected = new Set(selectedPaths);
+	const tagging = new Set(taggingPaths);
 	const syncableCount = changedFiles.filter(isTaggableFile).length;
 	const selectedSyncableCount = changedFiles.filter(
 		(file) => isTaggableFile(file) && selected.has(file.path),
 	).length;
-	const visibleFiles = changedFiles
-		.filter(
-			(file) =>
-				isTaggableFile(file) &&
-				file.path.toLowerCase().includes(searchQuery.toLowerCase()),
-		)
-		.sort((a, b) => {
-			const order = a.path.localeCompare(b.path);
-			return sortAscending ? order : -order;
-		});
+	const queueFiles = changedFiles.filter(isTaggableFile).sort((a, b) => {
+		const order = a.path.localeCompare(b.path);
+		return sortAscending ? order : -order;
+	});
+	const taggingFiles = queueFiles.filter((file) => tagging.has(file.path));
+	const visibleFiles = queueFiles.filter(
+		(file) =>
+			!tagging.has(file.path) &&
+			file.path.toLowerCase().includes(searchQuery.toLowerCase()),
+	);
 
 	return (
 		<section className="flex min-h-0 flex-1 flex-col gap-3">
@@ -121,6 +124,28 @@ export function ChangedFileQueue({
 			</div>
 
 			<div className="min-h-0 overflow-auto">
+				{taggingFiles.length > 0 ? (
+					<details
+						className="mb-2 rounded bg-(--background-primary-alt) py-1"
+						open
+					>
+						<summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-(--text-muted)">
+							Tagging ({taggingFiles.length})
+						</summary>
+						<ul className="m-0 list-none p-0">
+							{taggingFiles.map((file) => (
+								<ChangedFileQueueRow
+									file={file}
+									key={file.path}
+									onToggleQueuedFile={onToggleQueuedFile}
+									selected={selected.has(file.path)}
+									syncStatus={syncStatuses[file.path]}
+									tagging
+								/>
+							))}
+						</ul>
+					</details>
+				) : null}
 				{visibleFiles.length === 0 ? (
 					<p className="text-xs text-(--text-muted)">No matching files.</p>
 				) : (
@@ -193,6 +218,7 @@ interface ChangedFileQueueRowProps {
 	onToggleQueuedFile: (path: string) => void;
 	selected: boolean;
 	syncStatus?: BatchSyncStatus;
+	tagging?: boolean;
 }
 
 function ChangedFileQueueRow({
@@ -200,10 +226,28 @@ function ChangedFileQueueRow({
 	onToggleQueuedFile,
 	selected,
 	syncStatus,
+	tagging,
 }: ChangedFileQueueRowProps) {
 	const status = queueStatusDisplay(file);
 	const taggable = isTaggableFile(file);
 	const selectionClassName = selected ? "opacity-100" : "opacity-50";
+
+	if (tagging) {
+		return (
+			<li title={`${file.path} — Tagging`}>
+				<div className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5">
+					<span
+						aria-label="Tagging"
+						className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-(--interactive-accent) border-r-transparent"
+						role="status"
+					/>
+					<span className="min-w-0 flex-1 truncate animate-pulse text-(--interactive-accent)">
+						{file.fileName}
+					</span>
+				</div>
+			</li>
+		);
+	}
 
 	return (
 		<li title={`${file.path} — ${status.label}`}>
