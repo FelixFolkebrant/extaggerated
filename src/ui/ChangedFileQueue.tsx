@@ -125,7 +125,10 @@ export function ChangedFileQueue({
 
 			<div className="min-h-0 overflow-auto">
 				{taggingFiles.length > 0 ? (
-					<details className="mb-2" open>
+					<details
+						className="mb-2 rounded bg-(--background-primary-alt) py-1"
+						open
+					>
 						<summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-(--text-muted)">
 							Tagging ({taggingFiles.length})
 						</summary>
