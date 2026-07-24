@@ -20,6 +20,7 @@ interface ChangedFileQueueProps {
 	selectedPaths: string[];
 	sortAscending: boolean;
 	syncStatuses: Record<string, BatchSyncStatus>;
+	taggingPaths: string[];
 }
 
 export function ChangedFileQueue({
@@ -36,27 +37,23 @@ export function ChangedFileQueue({
 	selectedPaths,
 	sortAscending,
 	syncStatuses,
+	taggingPaths,
 }: ChangedFileQueueProps) {
 	const selected = new Set(selectedPaths);
+	const tagging = new Set(taggingPaths);
 	const syncableCount = changedFiles.filter(isTaggableFile).length;
 	const selectedSyncableCount = changedFiles.filter(
 		(file) => isTaggableFile(file) && selected.has(file.path),
 	).length;
-	const queueFiles = changedFiles
-		.filter(
-			(file) =>
-				isTaggableFile(file) &&
-				file.path.toLowerCase().includes(searchQuery.toLowerCase()),
-		)
-		.sort((a, b) => {
-			const order = a.path.localeCompare(b.path);
-			return sortAscending ? order : -order;
-		});
-	const taggingFiles = queueFiles.filter(
-		(file) => syncStatuses[file.path]?.type === "syncing",
-	);
+	const queueFiles = changedFiles.filter(isTaggableFile).sort((a, b) => {
+		const order = a.path.localeCompare(b.path);
+		return sortAscending ? order : -order;
+	});
+	const taggingFiles = queueFiles.filter((file) => tagging.has(file.path));
 	const visibleFiles = queueFiles.filter(
-		(file) => syncStatuses[file.path]?.type !== "syncing",
+		(file) =>
+			!tagging.has(file.path) &&
+			file.path.toLowerCase().includes(searchQuery.toLowerCase()),
 	);
 
 	return (
@@ -140,6 +137,7 @@ export function ChangedFileQueue({
 									onToggleQueuedFile={onToggleQueuedFile}
 									selected={selected.has(file.path)}
 									syncStatus={syncStatuses[file.path]}
+									tagging
 								/>
 							))}
 						</ul>
@@ -217,6 +215,7 @@ interface ChangedFileQueueRowProps {
 	onToggleQueuedFile: (path: string) => void;
 	selected: boolean;
 	syncStatus?: BatchSyncStatus;
+	tagging?: boolean;
 }
 
 function ChangedFileQueueRow({
@@ -224,12 +223,13 @@ function ChangedFileQueueRow({
 	onToggleQueuedFile,
 	selected,
 	syncStatus,
+	tagging,
 }: ChangedFileQueueRowProps) {
 	const status = queueStatusDisplay(file);
 	const taggable = isTaggableFile(file);
 	const selectionClassName = selected ? "opacity-100" : "opacity-50";
 
-	if (syncStatus?.type === "syncing") {
+	if (tagging) {
 		return (
 			<li title={`${file.path} — Tagging`}>
 				<div className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5">

@@ -15,6 +15,7 @@ interface ExtaggeratedViewProps {
 	selectedPaths: string[];
 	sortAscending: boolean;
 	syncStatuses: Record<string, BatchSyncStatus>;
+	taggingPaths: string[];
 }
 
 export function ExtaggeratedView(props: ExtaggeratedViewProps) {
