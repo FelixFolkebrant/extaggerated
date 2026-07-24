@@ -1,97 +1,26 @@
-import type { ChangedFileQueueItem, FreshnessStatus } from "../freshness";
-import { ActiveNoteSummary } from "./ActiveNoteSummary";
+import type { ChangedFileQueueItem } from "../freshness";
 import { type BatchSyncStatus, ChangedFileQueue } from "./ChangedFileQueue";
 
 interface ExtaggeratedViewProps {
 	changedFiles: ChangedFileQueueItem[];
-	freshnessStatus: FreshnessStatus;
 	hasApiKey: boolean;
-	model: string;
-	onInitializeTagging: () => void;
 	onRefreshQueue: () => void;
+	onSearchChange: (query: string) => void;
 	onSyncAll: () => void;
 	onSyncSelected: () => void;
 	onToggleQueuedFile: (path: string) => void;
+	onToggleSortDirection: () => void;
 	queueLoading: boolean;
+	searchQuery: string;
 	selectedPaths: string[];
+	sortAscending: boolean;
 	syncStatuses: Record<string, BatchSyncStatus>;
 }
 
-export function ExtaggeratedView({
-	changedFiles,
-	freshnessStatus,
-	hasApiKey,
-	model,
-	onInitializeTagging,
-	onRefreshQueue,
-	onSyncAll,
-	onSyncSelected,
-	onToggleQueuedFile,
-	queueLoading,
-	selectedPaths,
-	syncStatuses,
-}: ExtaggeratedViewProps) {
+export function ExtaggeratedView(props: ExtaggeratedViewProps) {
 	return (
-		<section className="flex h-full flex-col gap-4 overflow-hidden p-4 font-(family-name:--font-interface) text-sm text-(--text-normal)">
-			<header className="grid justify-items-start gap-1 border-b border-(--background-modifier-border) pb-3">
-				<div className="min-w-0">
-					<h1 className="truncate text-base font-semibold">Extaggerated</h1>
-					<p className="text-xs text-(--text-muted)">XT</p>
-				</div>
-				<span
-					className={`rounded px-2 py-1 text-xs font-medium ${
-						hasApiKey
-							? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-							: "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-					}`}
-				>
-					{hasApiKey ? "Configured" : "No key"}
-				</span>
-			</header>
-
-			<dl className="grid gap-3">
-				<div className="grid gap-2">
-					<dt className="text-xs uppercase text-(--text-muted)">Tagging</dt>
-					<dd className="m-0 grid gap-2">
-						<button
-							className="rounded bg-(--interactive-accent) px-3 py-2 text-left text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-50"
-							disabled={!hasApiKey}
-							onClick={onInitializeTagging}
-							type="button"
-						>
-							Initialize tagging
-						</button>
-						{!hasApiKey ? (
-							<p className="text-xs text-(--text-muted)">
-								Add an OpenRouter API key in settings first.
-							</p>
-						) : null}
-					</dd>
-				</div>
-				<ActiveNoteSummary freshnessStatus={freshnessStatus} />
-				<div className="grid gap-1">
-					<dt className="text-xs uppercase text-(--text-muted)">Provider</dt>
-					<dd className="m-0">OpenRouter</dd>
-				</div>
-				<div className="grid gap-1">
-					<dt className="text-xs uppercase text-(--text-muted)">Model</dt>
-					<dd className="m-0 truncate" title={model}>
-						{model}
-					</dd>
-				</div>
-			</dl>
-
-			<ChangedFileQueue
-				changedFiles={changedFiles}
-				hasApiKey={hasApiKey}
-				onRefreshQueue={onRefreshQueue}
-				onSyncAll={onSyncAll}
-				onSyncSelected={onSyncSelected}
-				onToggleQueuedFile={onToggleQueuedFile}
-				queueLoading={queueLoading}
-				selectedPaths={selectedPaths}
-				syncStatuses={syncStatuses}
-			/>
+		<section className="flex h-full flex-col overflow-hidden py-3 font-(family-name:--font-interface) text-sm text-(--text-normal)">
+			<ChangedFileQueue {...props} />
 		</section>
 	);
 }

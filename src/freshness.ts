@@ -10,15 +10,17 @@ export type FreshnessStatus =
 	| { type: "stale"; fileName: string }
 	| { type: "unavailable"; fileName: string; message: string };
 
-export type QueueFreshnessStatus = Exclude<
-	FreshnessStatus,
-	{ type: "ignored" } | { type: "no-note" }
+export type FileFreshnessStatus = Exclude<FreshnessStatus, { type: "no-note" }>;
+
+type CalculatedFreshnessStatus = Exclude<
+	FileFreshnessStatus,
+	{ type: "ignored" }
 >;
 
 export interface ChangedFileQueueItem {
 	fileName: string;
 	path: string;
-	status: QueueFreshnessStatus["type"];
+	status: FileFreshnessStatus["type"];
 	message?: string;
 }
 
@@ -31,7 +33,7 @@ export async function getActiveNoteFreshness(
 		return { type: "no-note" };
 	}
 
-	if (frontmatterIgnored(plugin, file)) {
+	if (isFileIgnored(plugin, file)) {
 		return { fileName: file.basename, type: "ignored" };
 	}
 
@@ -44,11 +46,9 @@ export async function getChangedFileQueue(
 	const queue: ChangedFileQueueItem[] = [];
 
 	for (const file of plugin.app.vault.getMarkdownFiles()) {
-		const freshness = await getFileFreshness(plugin, file);
-
-		if (freshness.type === "fresh") {
-			continue;
-		}
+		const freshness = isFileIgnored(plugin, file)
+			? { fileName: file.basename, type: "ignored" as const }
+			: await getFileFreshness(plugin, file);
 
 		queue.push({
 			fileName: freshness.fileName,
@@ -61,10 +61,14 @@ export async function getChangedFileQueue(
 	return queue.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+export function isTaggableFile(file: ChangedFileQueueItem): boolean {
+	return file.status === "stale" || file.status === "untagged";
+}
+
 async function getFileFreshness(
 	plugin: ExtaggeratedPlugin,
 	file: TFile,
-): Promise<QueueFreshnessStatus> {
+): Promise<CalculatedFreshnessStatus> {
 	try {
 		const markdown = await plugin.app.vault.read(file);
 		const storedHash = frontmatterHash(plugin, file);
@@ -98,7 +102,10 @@ function frontmatterHash(
 	return typeof hash === "string" && hash.length > 0 ? hash : null;
 }
 
-function frontmatterIgnored(plugin: ExtaggeratedPlugin, file: TFile): boolean {
+export function isFileIgnored(
+	plugin: ExtaggeratedPlugin,
+	file: TFile,
+): boolean {
 	return (
 		plugin.app.metadataCache.getFileCache(file)?.frontmatter?.xt_ignore === true
 	);

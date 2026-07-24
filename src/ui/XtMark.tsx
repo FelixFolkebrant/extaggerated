@@ -1,0 +1,29 @@
+interface XtMarkProps {
+	className?: string;
+}
+
+const paths = [
+	"M4 0.0387354L10.8145 3.97265H11.0732C11.0732 3.97265 17.5606 0.0386964 19.0606 0.0386964L23.8517 0C23.8517 0 14.5606 2.31249 14.5606 5.31249C14.5606 8.31249 21.0606 9.81249 21.0606 9.81249H17.0606L11.0732 5.73046H10.8145L4.06055 9.81249H0.0605544L8.2284 4.81249L0 0.0387354H4Z",
+	"M18.1765 1.85161L19.0606 0.0386964L45.9752 0.0386737L45.8924 1.77562H35.4832L35.4412 9.82232H31.4326L31.4746 1.77562L18.1765 1.85161Z",
+	"M19.5605 5.3125C19.5605 4.48407 20.2321 3.8125 21.0605 3.8125C21.889 3.8125 22.5605 4.48407 22.5605 5.3125C22.5605 6.14093 21.889 6.8125 21.0605 6.8125C20.2321 6.8125 19.5605 6.14093 19.5605 5.3125Z",
+];
+
+export function XtMark({ className }: XtMarkProps) {
+	return (
+		<svg
+			aria-hidden="true"
+			className={className}
+			fill="none"
+			viewBox="0 0 46 10"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			{paths.map((path) => (
+				<path d={path} fill="currentColor" key={path} />
+			))}
+		</svg>
+	);
+}
+
+export function renderXtMark(element: HTMLElement): void {
+	element.innerHTML = `<svg aria-hidden="true" fill="none" viewBox="0 0 46 10" xmlns="http://www.w3.org/2000/svg">${paths.map((path) => `<path d="${path}" fill="currentColor"/>`).join("")}</svg>`;
+}

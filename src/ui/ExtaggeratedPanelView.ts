@@ -3,13 +3,13 @@ import type { WorkspaceLeaf } from "obsidian";
 import type { Root } from "react-dom/client";
 import type ExtaggeratedPlugin from "../main";
 import {
-	getActiveNoteFreshness,
 	getChangedFileQueue,
+	isTaggableFile,
 	type ChangedFileQueueItem,
-	type FreshnessStatus,
 } from "../freshness";
 import { syncNoteTags } from "../noteSync";
 import type { BatchSyncStatus } from "./ChangedFileQueue";
+import { TagAllConfirmationModal } from "./TagAllConfirmationModal";
 import {
 	mountExtaggeratedView,
 	renderExtaggeratedView,
@@ -21,11 +21,11 @@ export const XT_VIEW_TYPE = "extaggerated-view";
 export class ExtaggeratedPanelView extends ItemView {
 	private changedFiles: ChangedFileQueueItem[] = [];
 	private root: Root | null = null;
-	private freshnessStatus: FreshnessStatus = { type: "no-note" };
-	private freshnessRefreshId = 0;
 	private queueLoading = false;
 	private queueRefreshId = 0;
+	private searchQuery = "";
 	private selectedPaths = new Set<string>();
+	private sortAscending = true;
 	private syncStatuses: Record<string, BatchSyncStatus> = {};
 
 	constructor(
@@ -55,45 +55,12 @@ export class ExtaggeratedPanelView extends ItemView {
 			...this.viewState(),
 		});
 
-		this.registerEvent(
-			this.app.workspace.on("file-open", () => {
-				void this.refreshFreshness();
-			}),
-		);
-		this.registerEvent(
-			this.app.vault.on("modify", (file) => {
-				if (file === this.app.workspace.getActiveFile()) {
-					void this.refreshFreshness();
-				}
-			}),
-		);
-		this.registerEvent(
-			this.app.metadataCache.on("changed", (file) => {
-				if (file === this.app.workspace.getActiveFile()) {
-					void this.refreshFreshness();
-				}
-			}),
-		);
-
-		await this.refreshFreshness();
 		await this.refreshQueue();
 	}
 
 	async onClose(): Promise<void> {
 		this.root?.unmount();
 		this.root = null;
-	}
-
-	private async refreshFreshness(): Promise<void> {
-		const refreshId = ++this.freshnessRefreshId;
-		const freshnessStatus = await getActiveNoteFreshness(this.plugin);
-
-		if (refreshId !== this.freshnessRefreshId) {
-			return;
-		}
-
-		this.freshnessStatus = freshnessStatus;
-		this.render();
 	}
 
 	private render(): void {
@@ -107,17 +74,16 @@ export class ExtaggeratedPanelView extends ItemView {
 	private viewState(): ExtaggeratedViewState {
 		return {
 			changedFiles: this.changedFiles,
-			freshnessStatus: this.freshnessStatus,
 			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
-			model: this.plugin.settings.model,
-			onInitializeTagging: () => {
-				void this.plugin.initializeTagging();
-			},
 			onRefreshQueue: () => {
 				void this.refreshQueue();
 			},
+			onSearchChange: (query) => {
+				this.searchQuery = query;
+				this.render();
+			},
 			onSyncAll: () => {
-				void this.syncQueuedFiles(this.syncableQueuePaths());
+				void this.confirmAndSyncAll();
 			},
 			onSyncSelected: () => {
 				void this.syncQueuedFiles(
@@ -129,8 +95,14 @@ export class ExtaggeratedPanelView extends ItemView {
 			onToggleQueuedFile: (path) => {
 				this.toggleQueuedFile(path);
 			},
+			onToggleSortDirection: () => {
+				this.sortAscending = !this.sortAscending;
+				this.render();
+			},
 			queueLoading: this.queueLoading,
+			searchQuery: this.searchQuery,
 			selectedPaths: [...this.selectedPaths],
+			sortAscending: this.sortAscending,
 			syncStatuses: this.syncStatuses,
 		};
 	}
@@ -150,7 +122,9 @@ export class ExtaggeratedPanelView extends ItemView {
 		this.queueLoading = false;
 		this.selectedPaths = new Set(
 			[...this.selectedPaths].filter((path) =>
-				this.changedFiles.some((file) => file.path === path),
+				this.changedFiles.some(
+					(file) => file.path === path && isTaggableFile(file),
+				),
 			),
 		);
 		this.render();
@@ -167,9 +141,25 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private syncableQueuePaths(): string[] {
-		return this.changedFiles
-			.filter((file) => file.status !== "unavailable")
-			.map((file) => file.path);
+		return this.changedFiles.filter(isTaggableFile).map((file) => file.path);
+	}
+
+	private async confirmAndSyncAll(): Promise<void> {
+		const paths = this.syncableQueuePaths();
+
+		if (paths.length === 0) {
+			new Notice("No changed or untagged notes are available to tag.");
+			return;
+		}
+
+		const confirmed = await new TagAllConfirmationModal(
+			this.app,
+			paths.length,
+		).openAndWait();
+
+		if (confirmed) {
+			await this.syncQueuedFiles(paths);
+		}
 	}
 
 	private async syncQueuedFiles(paths: string[]): Promise<void> {
