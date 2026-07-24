@@ -122,7 +122,7 @@ export function ChangedFileQueue({
 				{visibleFiles.length === 0 ? (
 					<p className="text-xs text-(--text-muted)">No matching files.</p>
 				) : (
-					<ul>
+					<ul className="m-0 list-none p-0">
 						{visibleFiles.map((file) => (
 							<ChangedFileQueueRow
 								file={file}
@@ -204,7 +204,7 @@ function ChangedFileQueueRow({
 
 	return (
 		<li
-			className="flex min-w-0 items-center gap-3 py-1.5"
+			className="flex min-w-0 items-center gap-2 py-1.5"
 			title={`${file.path} — ${status.label}`}
 		>
 			<input
@@ -218,7 +218,7 @@ function ChangedFileQueueRow({
 				type="checkbox"
 			/>
 			<span className={`min-w-0 flex-1 truncate ${status.className}`}>
-				{file.path}
+				{file.fileName}
 			</span>
 			<RowEnd file={file} syncStatus={syncStatus} />
 		</li>
