@@ -43,8 +43,10 @@ export function ChangedFileQueue({
 		(file) => isTaggableFile(file) && selected.has(file.path),
 	).length;
 	const visibleFiles = changedFiles
-		.filter((file) =>
-			file.path.toLowerCase().includes(searchQuery.toLowerCase()),
+		.filter(
+			(file) =>
+				isTaggableFile(file) &&
+				file.path.toLowerCase().includes(searchQuery.toLowerCase()),
 		)
 		.sort((a, b) => {
 			const order = a.path.localeCompare(b.path);

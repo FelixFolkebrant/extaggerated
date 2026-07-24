@@ -90,19 +90,19 @@ function headerSyncIndicatorDisplay(
 			return {
 				className: "text-(--interactive-accent)",
 				label: "XT tagged",
-				title: "XT tags match the current note body.",
+				title: "Tagged",
 			};
 		case "stale":
 			return {
 				className: "text-(--interactive-accent) opacity-40",
 				label: "XT modified since sync",
-				title: "The note body changed after the last XT tag sync.",
+				title: "Needs retagging",
 			};
 		case "untagged":
 			return {
 				className: "text-(--text-muted)",
 				label: "XT never synced",
-				title: "No XT content hash is stored on this note.",
+				title: "Untagged",
 			};
 		case "ignored":
 			return {
