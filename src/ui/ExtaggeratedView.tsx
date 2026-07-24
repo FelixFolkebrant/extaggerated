@@ -19,7 +19,7 @@ interface ExtaggeratedViewProps {
 
 export function ExtaggeratedView(props: ExtaggeratedViewProps) {
 	return (
-		<section className="flex h-full flex-col overflow-hidden p-4 font-(family-name:--font-interface) text-sm text-(--text-normal)">
+		<section className="flex h-full flex-col overflow-hidden py-3 font-(family-name:--font-interface) text-sm text-(--text-normal)">
 			<ChangedFileQueue {...props} />
 		</section>
 	);

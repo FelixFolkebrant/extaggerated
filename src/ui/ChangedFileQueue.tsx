@@ -1,4 +1,4 @@
-import { isTaggableFile, type ChangedFileQueueItem } from "../freshness";
+import { type ChangedFileQueueItem, isTaggableFile } from "../freshness";
 import { XtMark } from "./XtMark";
 
 export type BatchSyncStatus =
@@ -54,8 +54,8 @@ export function ChangedFileQueue({
 		});
 
 	return (
-		<section className="flex min-h-0 flex-1 flex-col gap-4">
-			<header className="grid gap-3">
+		<section className="flex min-h-0 flex-1 flex-col gap-3">
+			<header className="grid gap-3 px-3">
 				<div className="flex items-center justify-between gap-3">
 					<div className="flex items-center gap-2 text-(--text-normal)">
 						<XtMark className="h-auto w-12" />
@@ -77,7 +77,7 @@ export function ChangedFileQueue({
 
 			<input
 				aria-label="Search files"
-				className="w-full rounded bg-(--background-primary-alt) px-3 py-2 text-sm outline-none placeholder:text-(--text-muted) focus:ring-1 focus:ring-(--interactive-accent)"
+				className="mx-3 w-auto rounded bg-(--background-primary-alt) px-3 py-2 text-sm outline-none placeholder:text-(--text-muted) focus:ring-1 focus:ring-(--interactive-accent)"
 				onChange={(event) => {
 					onSearchChange(event.target.value);
 				}}
@@ -87,9 +87,9 @@ export function ChangedFileQueue({
 				value={searchQuery}
 			/>
 
-			<div className="grid grid-cols-2 gap-3">
+			<div className="mx-3 grid grid-cols-2 gap-3">
 				<button
-					className="rounded bg-(--interactive-accent) px-3 py-2 text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-50"
+					className="rounded bg-(--interactive-accent) px-3 py-2 text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-60"
 					disabled={!hasApiKey || queueLoading || selectedSyncableCount === 0}
 					onClick={onSyncSelected}
 					type="button"
@@ -106,7 +106,7 @@ export function ChangedFileQueue({
 				</button>
 			</div>
 
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between px-3">
 				<button
 					aria-label={`Sort alphabetically ${sortAscending ? "descending" : "ascending"}`}
 					className="flex items-center gap-2 rounded px-2 py-1 text-sm text-(--text-muted) hover:bg-(--background-primary-alt) hover:text-(--text-normal)"
@@ -203,35 +203,39 @@ function ChangedFileQueueRow({
 }: ChangedFileQueueRowProps) {
 	const status = queueStatusDisplay(file);
 	const taggable = isTaggableFile(file);
+	const selectionClassName = selected ? "opacity-100" : "opacity-50";
 
 	return (
-		<li
-			className="flex min-w-0 items-center gap-2 py-1.5"
-			title={`${file.path} — ${status.label}`}
-		>
-			<input
-				aria-label={`Tag ${file.path}`}
-				checked={selected}
-				className="h-4 w-4 shrink-0 accent-(--interactive-accent) disabled:cursor-default"
-				disabled={!taggable}
-				onChange={() => {
-					onToggleQueuedFile(file.path);
-				}}
-				type="checkbox"
-			/>
-			<span className={`min-w-0 flex-1 truncate ${status.className}`}>
-				{file.fileName}
-			</span>
-			<RowEnd file={file} syncStatus={syncStatus} />
+		<li title={`${file.path} — ${status.label}`}>
+			<label className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-(--background-primary-alt)">
+				<input
+					aria-label={`Tag ${file.path}`}
+					checked={selected}
+					className="h-4 w-4 shrink-0 accent-(--interactive-accent) disabled:cursor-default"
+					disabled={!taggable}
+					onChange={() => {
+						onToggleQueuedFile(file.path);
+					}}
+					type="checkbox"
+				/>
+				<span
+					className={`min-w-0 flex-1 truncate ${status.className} ${selectionClassName}`}
+				>
+					{file.fileName}
+				</span>
+				<RowEnd file={file} selected={selected} syncStatus={syncStatus} />
+			</label>
 		</li>
 	);
 }
 
 function RowEnd({
 	file,
+	selected,
 	syncStatus,
 }: {
 	file: ChangedFileQueueItem;
+	selected: boolean;
 	syncStatus?: BatchSyncStatus;
 }) {
 	if (syncStatus?.type === "syncing") {
@@ -243,7 +247,10 @@ function RowEnd({
 	}
 
 	return file.status === "untagged" ? (
-		<span aria-label="Never tagged" className="text-lg text-(--text-muted)">
+		<span
+			aria-label="Never tagged"
+			className={`text-lg text-(--text-muted) ${selected ? "opacity-100" : "opacity-50"}`}
+		>
 			+
 		</span>
 	) : null;
@@ -258,7 +265,7 @@ function queueStatusDisplay(file: ChangedFileQueueItem): {
 			return { className: "text-(--text-normal)", label: "Tagged" };
 		case "stale":
 			return {
-				className: "text-(--interactive-accent) opacity-60",
+				className: "text-(--interactive-accent)",
 				label: "Edited since tagging",
 			};
 		case "untagged":
