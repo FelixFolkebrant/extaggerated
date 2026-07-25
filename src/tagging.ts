@@ -19,7 +19,7 @@ export interface RetrievalTagRequest {
 }
 
 export const TAGGING_PROMPT =
-	"You generate Obsidian tags. Return only JSON with a tags array of strings. Tags must be lowercase, factual, singular nouns by default, one concept each, and use kebab-case when multiple words are needed. Avoid broad tags like note, information, interesting, idea, notes, or knowledge.";
+	'You generate Obsidian tags. Return only JSON in the format {"results":[{"id":"input note id","tags":["tag"]}]}. Return one result for every input note and preserve its id. Tags must be lowercase, factual, singular nouns by default, one concept each, and use kebab-case when multiple words are needed. Avoid broad tags like note, information, interesting, idea, notes, or knowledge.';
 
 export function normalizeTags(tags: string[]): string[] {
 	const seen = new Set<string>();
