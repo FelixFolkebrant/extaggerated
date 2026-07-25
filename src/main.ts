@@ -1,5 +1,10 @@
 import { Notice, Plugin } from "obsidian";
-import { ignoreActiveNote, syncActiveNoteTags } from "./noteSync";
+import {
+	clearXtStateFromActiveNote,
+	clearXtStateFromVault,
+	ignoreActiveNote,
+	syncActiveNoteTags,
+} from "./noteSync";
 import {
 	DEFAULT_SETTINGS,
 	type ExtaggeratedSettings,
@@ -50,6 +55,22 @@ export default class ExtaggeratedPlugin extends Plugin {
 			name: "Ignore active note",
 			callback: () => {
 				void this.ignoreActiveNote();
+			},
+		});
+
+		this.addCommand({
+			id: "debug-clear-xt-state-active-note",
+			name: "Debug: Clear XT metadata from active note",
+			callback: () => {
+				void this.clearXtStateFromActiveNote();
+			},
+		});
+
+		this.addCommand({
+			id: "debug-clear-xt-state-vault",
+			name: "Debug: Clear XT metadata from all notes",
+			callback: () => {
+				void clearXtStateFromVault(this);
 			},
 		});
 
@@ -125,5 +146,11 @@ export default class ExtaggeratedPlugin extends Plugin {
 	private async ignoreActiveNote(): Promise<void> {
 		await ignoreActiveNote(this);
 		await this.refreshHeaderSyncIndicator?.();
+	}
+
+	private async clearXtStateFromActiveNote(): Promise<void> {
+		if (await clearXtStateFromActiveNote(this)) {
+			await this.refreshHeaderSyncIndicator?.();
+		}
 	}
 }

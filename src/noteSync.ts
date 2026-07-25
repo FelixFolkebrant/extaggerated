@@ -95,6 +95,63 @@ export async function ignoreActiveNote(
 	new Notice(`XT now ignores ${file.basename}.`);
 }
 
+export async function clearXtStateFromActiveNote(
+	plugin: ExtaggeratedPlugin,
+): Promise<boolean> {
+	const file = plugin.app.workspace.getActiveFile();
+
+	if (file?.extension !== "md") {
+		new Notice("Open a markdown note before clearing XT metadata.");
+		return false;
+	}
+
+	if (!hasXtMetadata(plugin, file)) {
+		new Notice(`${file.basename} has no XT metadata to clear.`);
+		return false;
+	}
+
+	if (
+		!window.confirm(
+			`XT will clear its metadata from ${file.basename}. Continue?`,
+		)
+	) {
+		return false;
+	}
+
+	await clearXtState(plugin, file);
+	new Notice(`Cleared XT metadata from ${file.basename}.`);
+	return true;
+}
+
+export async function clearXtStateFromVault(
+	plugin: ExtaggeratedPlugin,
+): Promise<void> {
+	const files = plugin.app.vault
+		.getMarkdownFiles()
+		.filter((file) => hasXtMetadata(plugin, file));
+
+	if (files.length === 0) {
+		new Notice("No notes have XT metadata to clear.");
+		return;
+	}
+
+	if (
+		!window.confirm(
+			`XT will clear its metadata from ${files.length} note${files.length === 1 ? "" : "s"}. Continue?`,
+		)
+	) {
+		return;
+	}
+
+	for (const file of files) {
+		await clearXtState(plugin, file);
+	}
+
+	new Notice(
+		`Cleared XT metadata from ${files.length} note${files.length === 1 ? "" : "s"}.`,
+	);
+}
+
 export async function syncNoteTags(
 	plugin: ExtaggeratedPlugin,
 	file: TFile,
@@ -200,6 +257,25 @@ async function writeTags(
 	});
 }
 
-function toError(error: unknown): Error {
-	return error instanceof Error ? error : new Error(String(error));
+function hasXtMetadata(plugin: ExtaggeratedPlugin, file: TFile): boolean {
+	const frontmatter = plugin.app.metadataCache.getFileCache(file)?.frontmatter;
+
+	return (
+		frontmatter !== undefined &&
+		(Object.hasOwn(frontmatter, "xt_content_hash") ||
+			Object.hasOwn(frontmatter, "xt_ignore"))
+	);
+}
+
+async function clearXtState(
+	plugin: ExtaggeratedPlugin,
+	file: TFile,
+): Promise<void> {
+	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+		if (Object.hasOwn(frontmatter, "xt_content_hash")) {
+			delete frontmatter.tags;
+			delete frontmatter.xt_content_hash;
+		}
+		delete frontmatter.xt_ignore;
+	});
 }
