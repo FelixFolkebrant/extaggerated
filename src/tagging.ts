@@ -11,6 +11,13 @@ export interface TaggingNote {
 	noteText: string;
 }
 
+export interface RetrievalTagRequest {
+	apiKey: string;
+	description: string;
+	model: string;
+	name: string;
+}
+
 export const TAGGING_PROMPT =
 	"You generate Obsidian tags. Return only JSON with a tags array of strings. Tags must be lowercase, factual, singular nouns by default, one concept each, and use kebab-case when multiple words are needed. Avoid broad tags like note, information, interesting, idea, notes, or knowledge.";
 
@@ -167,4 +174,30 @@ export async function generateTagsForNotes({
 	}
 
 	return tagsById;
+}
+
+export async function generateRetrievalTags({
+	apiKey,
+	description,
+	model,
+	name,
+}: RetrievalTagRequest): Promise<string[]> {
+	const tags = (
+		await generateTagsForNotes({
+			apiKey,
+			model,
+			notes: [
+				{
+					id: "node",
+					noteText: `Node name: ${name}\nDescription: ${description}`,
+				},
+			],
+		})
+	).get("node");
+
+	if (!tags || tags.length === 0) {
+		throw new Error("OpenRouter returned no usable retrieval tags.");
+	}
+
+	return tags;
 }
