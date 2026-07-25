@@ -15,6 +15,7 @@ import {
 	renderExtaggeratedView,
 	type ExtaggeratedViewState,
 } from "./mount";
+import type { NodeDraft } from "./ExtaggeratedView";
 
 export const XT_VIEW_TYPE = "extaggerated-view";
 
@@ -76,6 +77,9 @@ export class ExtaggeratedPanelView extends ItemView {
 		return {
 			changedFiles: this.changedFiles,
 			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
+			onCreateNode: (draft) => {
+				this.createNode(draft);
+			},
 			onOpenSettings: () => {
 				this.plugin.openSettings();
 			},
@@ -110,6 +114,10 @@ export class ExtaggeratedPanelView extends ItemView {
 			syncStatuses: this.syncStatuses,
 			taggingPaths: [...this.taggingPaths],
 		};
+	}
+
+	private createNode(draft: NodeDraft): void {
+		new Notice(`Node draft ready: ${draft.name}`);
 	}
 
 	private async refreshQueue(): Promise<void> {

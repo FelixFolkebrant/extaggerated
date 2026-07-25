@@ -5,12 +5,14 @@ export interface ExtaggeratedSettings {
 	maxBatchTokens: number;
 	openRouterApiKey: string;
 	model: string;
+	nodesFolder: string;
 }
 
 export const DEFAULT_SETTINGS: ExtaggeratedSettings = {
 	maxBatchTokens: 4000,
 	openRouterApiKey: "",
 	model: "google/gemini-3.1-flash-lite",
+	nodesFolder: "XT Nodes",
 };
 
 export function isValidBatchTokenBudget(value: unknown): value is number {
@@ -50,6 +52,20 @@ export class ExtaggeratedSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				});
 		});
+
+		new Setting(containerEl)
+			.setName("Nodes folder")
+			.setDesc("Vault-relative folder for generated nodes.")
+			.addText((text) => {
+				text
+					.setPlaceholder(DEFAULT_SETTINGS.nodesFolder)
+					.setValue(this.plugin.settings.nodesFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.nodesFolder =
+							value.trim() || DEFAULT_SETTINGS.nodesFolder;
+						await this.plugin.saveSettings();
+					});
+			});
 
 		new Setting(containerEl)
 			.setName("Maximum batch tokens")
