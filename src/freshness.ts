@@ -110,3 +110,7 @@ export function isFileIgnored(
 		plugin.app.metadataCache.getFileCache(file)?.frontmatter?.xt_ignore === true
 	);
 }
+
+export function hasXtTags(plugin: ExtaggeratedPlugin, file: TFile): boolean {
+	return frontmatterHash(plugin, file) !== null;
+}
