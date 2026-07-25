@@ -7,6 +7,7 @@ import { ExtaggeratedView } from "./ExtaggeratedView";
 export interface ExtaggeratedViewState {
 	changedFiles: ChangedFileQueueItem[];
 	hasApiKey: boolean;
+	onOpenNodeCreation: () => void;
 	onOpenSettings: () => void;
 	onRefreshQueue: () => void;
 	onSearchChange: (query: string) => void;
