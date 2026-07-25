@@ -68,6 +68,17 @@ export default class ExtaggeratedPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	openSettings(): void {
+		const settings = (
+			this.app as typeof this.app & {
+				setting: { open: () => void; openTabById: (id: string) => void };
+			}
+		).setting;
+
+		settings.open();
+		settings.openTabById(this.manifest.id);
+	}
+
 	private async activateView(): Promise<void> {
 		for (const leaf of this.app.workspace.getLeavesOfType(XT_VIEW_TYPE)) {
 			leaf.detach();

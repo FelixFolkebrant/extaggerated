@@ -76,6 +76,9 @@ export class ExtaggeratedPanelView extends ItemView {
 		return {
 			changedFiles: this.changedFiles,
 			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
+			onOpenSettings: () => {
+				this.plugin.openSettings();
+			},
 			onRefreshQueue: () => {
 				void this.refreshQueue();
 			},
