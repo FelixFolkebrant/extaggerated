@@ -2,10 +2,24 @@ import type { TFile } from "obsidian";
 import { Notice } from "obsidian";
 import { hasXtTags, isFileIgnored } from "./freshness";
 import type ExtaggeratedPlugin from "./main";
-import { generateTags, hashNoteBody, noteBodyForHash } from "./tagging";
+import { groupByTokenBudget, estimateTokens } from "./tagBatching";
+import { generateTagsForNotes, hashNoteBody, noteBodyForHash } from "./tagging";
 
 export interface SyncNoteTagsResult {
 	tagCount: number;
+}
+
+export interface SyncNoteTagBatchOutcome {
+	error?: Error;
+	file: TFile;
+	result?: SyncNoteTagsResult;
+}
+
+interface PreparedNote {
+	contentHash: string;
+	file: TFile;
+	noteText: string;
+	estimatedTokens: number;
 }
 
 export async function syncActiveNoteTags(
@@ -142,29 +156,93 @@ export async function syncNoteTags(
 	plugin: ExtaggeratedPlugin,
 	file: TFile,
 ): Promise<SyncNoteTagsResult> {
-	if (isFileIgnored(plugin, file)) {
-		throw new Error(`${file.basename} is ignored by XT.`);
+	let outcome: SyncNoteTagBatchOutcome | undefined;
+	await syncNoteTagBatch(plugin, [file], (result) => {
+		outcome = result;
+	});
+
+	if (outcome?.result) {
+		return outcome.result;
 	}
 
+	throw outcome?.error ?? new Error("XT tag sync failed.");
+}
+
+export async function syncNoteTagBatch(
+	plugin: ExtaggeratedPlugin,
+	files: TFile[],
+	onComplete: (outcome: SyncNoteTagBatchOutcome) => void,
+): Promise<void> {
 	if (plugin.settings.openRouterApiKey.length === 0) {
 		throw new Error("Add an OpenRouter API key before syncing XT tags.");
 	}
 
-	const markdown = await plugin.app.vault.read(file);
-	const contentHash = await hashNoteBody(markdown);
-	const tags = await generateTags({
-		apiKey: plugin.settings.openRouterApiKey,
-		model: plugin.settings.model,
-		noteText: noteBodyForHash(markdown),
-	});
+	const notes: PreparedNote[] = [];
+	for (const file of files) {
+		if (isFileIgnored(plugin, file)) {
+			onComplete({
+				error: new Error(`${file.basename} is ignored by XT.`),
+				file,
+			});
+			continue;
+		}
 
-	if (tags.length === 0) {
-		throw new Error("OpenRouter returned no usable tags.");
+		try {
+			const markdown = await plugin.app.vault.read(file);
+			const noteText = noteBodyForHash(markdown);
+			notes.push({
+				contentHash: await hashNoteBody(markdown),
+				estimatedTokens: estimateTokens(noteText),
+				file,
+				noteText,
+			});
+		} catch (error) {
+			onComplete({ error: toError(error), file });
+		}
 	}
 
-	await writeTags(plugin, file, tags, contentHash);
+	const batches = groupByTokenBudget(notes, plugin.settings.maxBatchTokens);
 
-	return { tagCount: tags.length };
+	for (const batch of batches) {
+		const taggedNotes = batch.map((note, index) => ({
+			id: String(index),
+			note,
+		}));
+
+		try {
+			const tagsById = await generateTagsForNotes({
+				apiKey: plugin.settings.openRouterApiKey,
+				model: plugin.settings.model,
+				notes: taggedNotes.map(({ id, note }) => ({
+					id,
+					noteText: note.noteText,
+				})),
+			});
+
+			for (const { id, note } of taggedNotes) {
+				const tags = tagsById.get(id);
+				if (!tags || tags.length === 0) {
+					onComplete({
+						error: new Error("OpenRouter returned no usable tags."),
+						file: note.file,
+					});
+					continue;
+				}
+
+				try {
+					await writeTags(plugin, note.file, tags, note.contentHash);
+					onComplete({ file: note.file, result: { tagCount: tags.length } });
+				} catch (error) {
+					onComplete({ error: toError(error), file: note.file });
+				}
+			}
+		} catch (error) {
+			const batchError = toError(error);
+			for (const note of batch) {
+				onComplete({ error: batchError, file: note.file });
+			}
+		}
+	}
 }
 
 async function writeTags(

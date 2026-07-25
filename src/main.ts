@@ -9,6 +9,7 @@ import {
 	DEFAULT_SETTINGS,
 	type ExtaggeratedSettings,
 	ExtaggeratedSettingTab,
+	isValidBatchTokenBudget,
 } from "./settings";
 import {
 	ExtaggeratedPanelView,
@@ -79,9 +80,14 @@ export default class ExtaggeratedPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
+		const loadedSettings =
+			(await this.loadData()) as Partial<ExtaggeratedSettings> | null;
 		this.settings = {
 			...DEFAULT_SETTINGS,
-			...((await this.loadData()) as Partial<ExtaggeratedSettings> | null),
+			...loadedSettings,
+			maxBatchTokens: isValidBatchTokenBudget(loadedSettings?.maxBatchTokens)
+				? loadedSettings.maxBatchTokens
+				: DEFAULT_SETTINGS.maxBatchTokens,
 		};
 	}
 
