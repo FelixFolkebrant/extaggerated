@@ -279,3 +279,7 @@ async function clearXtState(
 		delete frontmatter.xt_ignore;
 	});
 }
+
+function toError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
+}
