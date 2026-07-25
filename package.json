@@ -9,6 +9,7 @@
 		"build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./styles.css --minify",
 		"check:tag-batches": "node scripts/check-tag-batches.mts",
 		"check:node-retrieval": "node scripts/check-node-retrieval.mts",
+		"check:node-document": "node scripts/check-node-document.mts",
 		"format": "biome format --write package.json package-lock.json biome.json manifest.json tsconfig.json esbuild.config.mjs src",
 		"format:check": "node scripts/check-tailwind-vars.mjs && biome format package.json package-lock.json biome.json manifest.json tsconfig.json esbuild.config.mjs src"
 	},

@@ -1,4 +1,4 @@
-import { requestUrl } from "obsidian";
+import { requestOpenRouterJson } from "./openRouter";
 
 export interface TaggingRequest {
 	apiKey: string;
@@ -19,21 +19,7 @@ export interface RetrievalTagRequest {
 }
 
 export const TAGGING_PROMPT =
-	"You generate Obsidian tags. Return only JSON with a tags array of strings. Tags must be lowercase, factual, singular nouns by default, one concept each, and use kebab-case when multiple words are needed. Avoid broad tags like note, information, interesting, idea, notes, or knowledge.";
-
-interface OpenRouterChoice {
-	finish_reason?: string;
-	message?: {
-		content?: string | Array<{ text?: string }>;
-	};
-}
-
-interface OpenRouterResponse {
-	choices?: OpenRouterChoice[];
-	error?: {
-		message?: string;
-	};
-}
+	'You generate Obsidian tags. Return only JSON in the format {"results":[{"id":"input note id","tags":["tag"]}]}. Return one result for every input note and preserve its id. Tags must be lowercase, factual, singular nouns by default, one concept each, and use kebab-case when multiple words are needed. Avoid broad tags like note, information, interesting, idea, notes, or knowledge.';
 
 export function normalizeTags(tags: string[]): string[] {
 	const seen = new Set<string>();
@@ -83,59 +69,25 @@ export async function generateTagsForNotes({
 
 	const maxCompletionTokens = Math.max(1_024, notes.length * 128);
 
-	const response = await requestUrl({
-		body: JSON.stringify({
-			max_completion_tokens: maxCompletionTokens,
-			messages: [
-				{
-					content: TAGGING_PROMPT,
-					role: "system",
-				},
-				{
-					content: JSON.stringify(notes),
-					role: "user",
-				},
-			],
-			model,
-			response_format: { type: "json_object" },
-		}),
-		contentType: "application/json",
-		headers: {
-			Authorization: `Bearer ${apiKey}`,
-		},
-		method: "POST",
-		url: "https://openrouter.ai/api/v1/chat/completions",
-	});
-
-	const data = response.json as OpenRouterResponse;
-	if (data.error?.message) {
-		throw new Error(data.error.message);
-	}
-
-	const choice = data.choices?.[0];
-	if (choice?.finish_reason === "length") {
-		throw new Error(
-			`OpenRouter cut off the batch response at ${maxCompletionTokens} completion tokens. Lower the maximum batch token budget.`,
-		);
-	}
-
-	const content = choice?.message?.content;
-	const text = Array.isArray(content)
-		? content.map((part) => part.text ?? "").join("")
-		: content;
-
-	if (!text) {
-		throw new Error("OpenRouter returned no tags.");
-	}
-
-	let parsed: { results?: unknown };
-	try {
-		parsed = JSON.parse(text) as { results?: unknown };
-	} catch {
-		throw new Error(
+	const parsed = await requestOpenRouterJson<{ results?: unknown }>({
+		apiKey,
+		emptyResponseMessage: "OpenRouter returned no tags.",
+		incompleteJsonMessage:
 			"OpenRouter returned incomplete JSON. Lower the maximum batch token budget.",
-		);
-	}
+		maxCompletionTokens,
+		messages: [
+			{
+				content: TAGGING_PROMPT,
+				role: "system",
+			},
+			{
+				content: JSON.stringify(notes),
+				role: "user",
+			},
+		],
+		model,
+		truncatedResponseMessage: `OpenRouter cut off the batch response at ${maxCompletionTokens} completion tokens. Lower the maximum batch token budget.`,
+	});
 	if (!Array.isArray(parsed.results)) {
 		throw new Error("OpenRouter returned batch tags in an unexpected format.");
 	}
