@@ -8,6 +8,7 @@ import {
 	type ChangedFileQueueItem,
 } from "../freshness";
 import { syncNoteTagBatch } from "../noteSync";
+import { generateNode } from "../nodeGeneration";
 import type { BatchSyncStatus } from "./ChangedFileQueue";
 import { TagAllConfirmationModal } from "./TagAllConfirmationModal";
 import {
@@ -29,6 +30,7 @@ export class ExtaggeratedPanelView extends ItemView {
 	private sortAscending = true;
 	private syncStatuses: Record<string, BatchSyncStatus> = {};
 	private taggingPaths = new Set<string>();
+	private nodeCreating = false;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -118,12 +120,26 @@ export class ExtaggeratedPanelView extends ItemView {
 
 	private openNodeCreation(): void {
 		new NodeCreationModal(this.app, (draft) => {
-			this.createNode(draft);
+			return this.createNode(draft);
 		}).open();
 	}
 
-	private createNode(draft: NodeDraft): void {
-		new Notice(`Node draft ready: ${draft.name}`);
+	private async createNode(draft: NodeDraft): Promise<void> {
+		if (this.nodeCreating) {
+			throw new Error("XT is already creating a node.");
+		}
+
+		this.nodeCreating = true;
+		try {
+			await generateNode(this.plugin, draft);
+			new Notice(`Created ${draft.name}.`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			new Notice(`XT could not create ${draft.name}: ${message}`, 8_000);
+			throw error;
+		} finally {
+			this.nodeCreating = false;
+		}
 	}
 
 	private async refreshQueue(): Promise<void> {

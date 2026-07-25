@@ -11,7 +11,7 @@ export class NodeCreationModal extends Modal {
 
 	constructor(
 		app: Modal["app"],
-		private readonly onCreate: (draft: NodeDraft) => void,
+		private readonly onCreate: (draft: NodeDraft) => Promise<void>,
 	) {
 		super(app);
 	}
@@ -57,16 +57,21 @@ export class NodeCreationModal extends Modal {
 		cancelButton.addEventListener("click", () => {
 			this.close();
 		});
-		createButton.addEventListener("click", () => {
+		createButton.addEventListener("click", async () => {
 			if (!this.canCreate()) {
 				return;
 			}
 
-			this.onCreate({
-				description: this.description.trim(),
-				name: this.name.trim(),
-			});
-			this.close();
+			createButton.disabled = true;
+			try {
+				await this.onCreate({
+					description: this.description.trim(),
+					name: this.name.trim(),
+				});
+				this.close();
+			} catch {
+				updateCreateButton();
+			}
 		});
 
 		updateCreateButton();
