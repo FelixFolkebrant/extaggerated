@@ -1,4 +1,4 @@
-import { type ButtonComponent, Modal, Setting } from "obsidian";
+import { Modal } from "obsidian";
 
 export interface NodeDraft {
 	description: string;
@@ -20,49 +20,57 @@ export class NodeCreationModal extends Modal {
 		this.contentEl.empty();
 		this.contentEl.createEl("h2", { text: "Create node" });
 
-		let createButton: ButtonComponent | undefined;
+		const fields = this.contentEl.createDiv({ cls: "grid gap-4" });
+		const nameField = fields.createEl("label", { cls: "grid gap-1" });
+		nameField.createEl("span", { text: "Name" });
+		const nameInput = nameField.createEl("input", { attr: { type: "text" } });
+		nameInput.className = "w-full";
+		nameInput.required = true;
+
+		const descriptionField = fields.createEl("label", { cls: "grid gap-1" });
+		descriptionField.createEl("span", { text: "Description" });
+		const descriptionInput = descriptionField.createEl("textarea", {
+			attr: { rows: "4" },
+		});
+		descriptionInput.className = "w-full";
+		descriptionInput.required = true;
+
+		const actions = this.contentEl.createDiv({
+			cls: "mt-6 flex justify-end gap-3",
+		});
+		const cancelButton = actions.createEl("button", { text: "Cancel" });
+		const createButton = actions.createEl("button", { text: "Create" });
+		createButton.addClass("mod-cta");
+
 		const updateCreateButton = () => {
-			createButton?.setDisabled(!this.canCreate());
+			createButton.disabled = !this.canCreate();
 		};
 
-		new Setting(this.contentEl).setName("Name").addText((text) => {
-			text.inputEl.required = true;
-			text.onChange((value) => {
-				this.name = value;
-				updateCreateButton();
+		nameInput.addEventListener("input", () => {
+			this.name = nameInput.value;
+			updateCreateButton();
+		});
+		descriptionInput.addEventListener("input", () => {
+			this.description = descriptionInput.value;
+			updateCreateButton();
+		});
+		cancelButton.addEventListener("click", () => {
+			this.close();
+		});
+		createButton.addEventListener("click", () => {
+			if (!this.canCreate()) {
+				return;
+			}
+
+			this.onCreate({
+				description: this.description.trim(),
+				name: this.name.trim(),
 			});
-			text.inputEl.focus();
+			this.close();
 		});
 
-		new Setting(this.contentEl).setName("Description").addTextArea((text) => {
-			text.inputEl.required = true;
-			text.onChange((value) => {
-				this.description = value;
-				updateCreateButton();
-			});
-		});
-
-		new Setting(this.contentEl)
-			.addButton((button) => {
-				button.setButtonText("Cancel").onClick(() => {
-					this.close();
-				});
-			})
-			.addButton((button) => {
-				createButton = button.setButtonText("Create").setCta();
-				updateCreateButton();
-				button.onClick(() => {
-					if (!this.canCreate()) {
-						return;
-					}
-
-					this.onCreate({
-						description: this.description.trim(),
-						name: this.name.trim(),
-					});
-					this.close();
-				});
-			});
+		updateCreateButton();
+		nameInput.focus();
 	}
 
 	onClose(): void {

@@ -34,7 +34,9 @@ export function ExtaggeratedView(props: ExtaggeratedViewProps) {
 				mode={mode}
 				onOpenSettings={props.onOpenSettings}
 				onRefreshQueue={props.onRefreshQueue}
-				onSelectMode={setMode}
+				onToggleMode={() => {
+					setMode(mode === "tagging" ? "nodes" : "tagging");
+				}}
 				queueLoading={props.queueLoading}
 			/>
 			{mode === "tagging" ? (
@@ -59,14 +61,14 @@ function PanelHeader({
 	mode,
 	onOpenSettings,
 	onRefreshQueue,
-	onSelectMode,
+	onToggleMode,
 	queueLoading,
 }: {
 	changedFiles: ChangedFileQueueItem[];
 	mode: PanelMode;
 	onOpenSettings: () => void;
 	onRefreshQueue: () => void;
-	onSelectMode: (mode: PanelMode) => void;
+	onToggleMode: () => void;
 	queueLoading: boolean;
 }) {
 	return (
@@ -77,35 +79,21 @@ function PanelHeader({
 					<span className="sr-only">Extaggerated</span>
 				</div>
 				<div className="flex items-center gap-1">
-					<div
-						aria-label="Panel mode"
-						className="flex rounded-full bg-(--background-primary-alt) p-0.5"
+					<button
+						aria-label={`Switch to ${mode === "tagging" ? "nodes" : "tagging"}`}
+						aria-pressed={mode === "nodes"}
+						className="relative h-6 w-11 rounded-full bg-(--background-primary-alt)"
+						onClick={onToggleMode}
+						title={`Show ${mode === "tagging" ? "nodes" : "tagging"}`}
+						type="button"
 					>
-						<button
-							aria-label="Show tagging"
-							aria-pressed={mode === "tagging"}
-							className={`rounded-full px-2 py-1 text-sm ${mode === "tagging" ? "bg-(--background-primary) text-(--text-normal) shadow-sm" : "text-(--text-muted)"}`}
-							onClick={() => {
-								onSelectMode("tagging");
-							}}
-							title="Tagging"
-							type="button"
+						<span
+							aria-hidden="true"
+							className={`absolute left-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-(--interactive-accent) text-xs text-(--text-on-accent) transition-transform ${mode === "tagging" ? "translate-x-0" : "translate-x-5"}`}
 						>
-							#
-						</button>
-						<button
-							aria-label="Show nodes"
-							aria-pressed={mode === "nodes"}
-							className={`rounded-full px-2 py-1 text-sm ${mode === "nodes" ? "bg-(--background-primary) text-(--text-normal) shadow-sm" : "text-(--text-muted)"}`}
-							onClick={() => {
-								onSelectMode("nodes");
-							}}
-							title="Nodes"
-							type="button"
-						>
-							✦
-						</button>
-					</div>
+							{mode === "tagging" ? "#" : "✦"}
+						</span>
+					</button>
 					<button
 						aria-label="Open Extaggerated settings"
 						className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal)"
@@ -115,18 +103,16 @@ function PanelHeader({
 					>
 						⚙
 					</button>
-					{mode === "tagging" ? (
-						<button
-							aria-label="Refresh file status"
-							className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal) disabled:cursor-not-allowed disabled:opacity-50"
-							disabled={queueLoading}
-							onClick={onRefreshQueue}
-							title="Refresh file status"
-							type="button"
-						>
-							↻
-						</button>
-					) : null}
+					<button
+						aria-label="Refresh file status"
+						className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal) disabled:cursor-not-allowed disabled:opacity-50"
+						disabled={queueLoading}
+						onClick={onRefreshQueue}
+						title="Refresh file status"
+						type="button"
+					>
+						↻
+					</button>
 				</div>
 			</div>
 			{mode === "tagging" ? (
