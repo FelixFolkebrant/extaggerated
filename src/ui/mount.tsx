@@ -2,12 +2,12 @@ import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ChangedFileQueueItem } from "../freshness";
 import type { BatchSyncStatus } from "./ChangedFileQueue";
-import { ExtaggeratedView, type NodeDraft } from "./ExtaggeratedView";
+import { ExtaggeratedView } from "./ExtaggeratedView";
 
 export interface ExtaggeratedViewState {
 	changedFiles: ChangedFileQueueItem[];
 	hasApiKey: boolean;
-	onCreateNode: (draft: NodeDraft) => void;
+	onOpenNodeCreation: () => void;
 	onOpenSettings: () => void;
 	onRefreshQueue: () => void;
 	onSearchChange: (query: string) => void;

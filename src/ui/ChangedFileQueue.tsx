@@ -1,5 +1,4 @@
 import { type ChangedFileQueueItem, isTaggableFile } from "../freshness";
-import { XtMark } from "./XtMark";
 
 export type BatchSyncStatus =
 	| { type: "syncing" }
@@ -9,8 +8,6 @@ export type BatchSyncStatus =
 interface ChangedFileQueueProps {
 	changedFiles: ChangedFileQueueItem[];
 	hasApiKey: boolean;
-	onOpenSettings: () => void;
-	onRefreshQueue: () => void;
 	onSearchChange: (query: string) => void;
 	onSyncAll: () => void;
 	onSyncSelected: () => void;
@@ -27,8 +24,6 @@ interface ChangedFileQueueProps {
 export function ChangedFileQueue({
 	changedFiles,
 	hasApiKey,
-	onOpenSettings,
-	onRefreshQueue,
 	onSearchChange,
 	onSyncAll,
 	onSyncSelected,
@@ -60,37 +55,6 @@ export function ChangedFileQueue({
 
 	return (
 		<section className="flex min-h-0 flex-1 flex-col gap-3">
-			<header className="grid gap-3 px-3">
-				<div className="flex items-center justify-between gap-3">
-					<div className="flex items-center gap-2 text-(--text-normal)">
-						<XtMark className="h-auto w-12" />
-						<span className="sr-only">Extaggerated</span>
-					</div>
-					<div className="flex items-center gap-1">
-						<button
-							aria-label="Open Extaggerated settings"
-							className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal)"
-							onClick={onOpenSettings}
-							title="Open Extaggerated settings"
-							type="button"
-						>
-							⚙
-						</button>
-						<button
-							aria-label="Refresh file status"
-							className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal) disabled:cursor-not-allowed disabled:opacity-50"
-							disabled={queueLoading}
-							onClick={onRefreshQueue}
-							title="Refresh file status"
-							type="button"
-						>
-							↻
-						</button>
-					</div>
-				</div>
-				<FileStatusBar changedFiles={changedFiles} />
-			</header>
-
 			<input
 				aria-label="Search files"
 				className="mx-3 w-auto rounded bg-(--background-primary-alt) px-3 py-2 text-sm outline-none placeholder:text-(--text-muted) focus:ring-1 focus:ring-(--interactive-accent)"
@@ -176,53 +140,6 @@ export function ChangedFileQueue({
 				)}
 			</div>
 		</section>
-	);
-}
-
-function FileStatusBar({
-	changedFiles,
-}: {
-	changedFiles: ChangedFileQueueItem[];
-}) {
-	const statuses = [
-		{ className: "bg-(--interactive-accent)", label: "Tagged", type: "fresh" },
-		{
-			className: "bg-(--interactive-accent) opacity-40",
-			label: "Edited since tagging",
-			type: "stale",
-		},
-		{
-			className: "bg-(--text-muted) opacity-70",
-			label: "Never tagged",
-			type: "untagged",
-		},
-		{
-			className: "bg-(--background-modifier-border)",
-			label: "XT ignored",
-			type: "ignored",
-		},
-	] as const;
-
-	return (
-		<div
-			aria-label="File status distribution"
-			className="flex h-2 overflow-hidden rounded-full bg-(--background-primary-alt)"
-		>
-			{statuses.map((status) => {
-				const count = changedFiles.filter(
-					(file) => file.status === status.type,
-				).length;
-
-				return count > 0 ? (
-					<span
-						className={status.className}
-						key={status.type}
-						style={{ flexGrow: count }}
-						title={`${status.label}: ${count}`}
-					/>
-				) : null;
-			})}
-		</div>
 	);
 }
 

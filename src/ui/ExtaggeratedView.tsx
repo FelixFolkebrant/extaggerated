@@ -1,16 +1,14 @@
 import { useState } from "react";
 import type { ChangedFileQueueItem } from "../freshness";
 import { type BatchSyncStatus, ChangedFileQueue } from "./ChangedFileQueue";
+import { XtMark } from "./XtMark";
 
-export interface NodeDraft {
-	description: string;
-	name: string;
-}
+type PanelMode = "tagging" | "nodes";
 
 interface ExtaggeratedViewProps {
 	changedFiles: ChangedFileQueueItem[];
 	hasApiKey: boolean;
-	onCreateNode: (draft: NodeDraft) => void;
+	onOpenNodeCreation: () => void;
 	onOpenSettings: () => void;
 	onRefreshQueue: () => void;
 	onSearchChange: (query: string) => void;
@@ -27,91 +25,160 @@ interface ExtaggeratedViewProps {
 }
 
 export function ExtaggeratedView(props: ExtaggeratedViewProps) {
-	const [creatingNode, setCreatingNode] = useState(false);
-	const [nodeDescription, setNodeDescription] = useState("");
-	const [nodeName, setNodeName] = useState("");
-	const draft: NodeDraft = {
-		description: nodeDescription.trim(),
-		name: nodeName.trim(),
-	};
-	const canCreateNode = draft.name.length > 0 && draft.description.length > 0;
-
-	function closeNodeForm(): void {
-		setCreatingNode(false);
-		setNodeName("");
-		setNodeDescription("");
-	}
+	const [mode, setMode] = useState<PanelMode>("tagging");
 
 	return (
 		<section className="flex h-full flex-col overflow-hidden py-3 font-(family-name:--font-interface) text-sm text-(--text-normal)">
-			<ChangedFileQueue {...props} />
-			<div className="border-t border-(--background-modifier-border) px-3 pt-3">
-				{creatingNode ? (
-					<form
-						className="grid gap-3"
-						onSubmit={(event) => {
-							event.preventDefault();
-
-							if (!canCreateNode) {
-								return;
-							}
-
-							props.onCreateNode(draft);
-							closeNodeForm();
-						}}
-					>
-						<label className="grid gap-1">
-							<span className="text-xs text-(--text-muted)">Name</span>
-							<input
-								autoFocus
-								className="rounded bg-(--background-primary-alt) px-3 py-2 outline-none focus:ring-1 focus:ring-(--interactive-accent)"
-								onChange={(event) => {
-									setNodeName(event.target.value);
-								}}
-								required
-								value={nodeName}
-							/>
-						</label>
-						<label className="grid gap-1">
-							<span className="text-xs text-(--text-muted)">Description</span>
-							<textarea
-								className="min-h-20 resize-y rounded bg-(--background-primary-alt) px-3 py-2 outline-none focus:ring-1 focus:ring-(--interactive-accent)"
-								onChange={(event) => {
-									setNodeDescription(event.target.value);
-								}}
-								required
-								value={nodeDescription}
-							/>
-						</label>
-						<div className="grid grid-cols-2 gap-3">
-							<button
-								className="rounded bg-(--interactive-accent) px-3 py-2 font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-60"
-								disabled={!canCreateNode}
-								type="submit"
-							>
-								Create
-							</button>
-							<button
-								className="rounded bg-(--background-primary-alt) px-3 py-2 font-medium"
-								onClick={closeNodeForm}
-								type="button"
-							>
-								Cancel
-							</button>
-						</div>
-					</form>
-				) : (
+			<PanelHeader
+				changedFiles={props.changedFiles}
+				mode={mode}
+				onOpenSettings={props.onOpenSettings}
+				onRefreshQueue={props.onRefreshQueue}
+				onSelectMode={setMode}
+				queueLoading={props.queueLoading}
+			/>
+			{mode === "tagging" ? (
+				<ChangedFileQueue {...props} />
+			) : (
+				<section className="flex flex-1 flex-col px-3 pt-3">
 					<button
-						className="w-full rounded bg-(--background-primary-alt) px-3 py-2 font-medium"
-						onClick={() => {
-							setCreatingNode(true);
-						}}
+						className="rounded bg-(--interactive-accent) px-3 py-2 font-medium text-(--text-on-accent)"
+						onClick={props.onOpenNodeCreation}
 						type="button"
 					>
 						Create node
 					</button>
-				)}
-			</div>
+				</section>
+			)}
 		</section>
+	);
+}
+
+function PanelHeader({
+	changedFiles,
+	mode,
+	onOpenSettings,
+	onRefreshQueue,
+	onSelectMode,
+	queueLoading,
+}: {
+	changedFiles: ChangedFileQueueItem[];
+	mode: PanelMode;
+	onOpenSettings: () => void;
+	onRefreshQueue: () => void;
+	onSelectMode: (mode: PanelMode) => void;
+	queueLoading: boolean;
+}) {
+	return (
+		<header className="grid gap-3 px-3">
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex items-center gap-2 text-(--text-normal)">
+					<XtMark className="h-auto w-12" />
+					<span className="sr-only">Extaggerated</span>
+				</div>
+				<div className="flex items-center gap-1">
+					<div
+						aria-label="Panel mode"
+						className="flex rounded-full bg-(--background-primary-alt) p-0.5"
+					>
+						<button
+							aria-label="Show tagging"
+							aria-pressed={mode === "tagging"}
+							className={`rounded-full px-2 py-1 text-sm ${mode === "tagging" ? "bg-(--background-primary) text-(--text-normal) shadow-sm" : "text-(--text-muted)"}`}
+							onClick={() => {
+								onSelectMode("tagging");
+							}}
+							title="Tagging"
+							type="button"
+						>
+							#
+						</button>
+						<button
+							aria-label="Show nodes"
+							aria-pressed={mode === "nodes"}
+							className={`rounded-full px-2 py-1 text-sm ${mode === "nodes" ? "bg-(--background-primary) text-(--text-normal) shadow-sm" : "text-(--text-muted)"}`}
+							onClick={() => {
+								onSelectMode("nodes");
+							}}
+							title="Nodes"
+							type="button"
+						>
+							✦
+						</button>
+					</div>
+					<button
+						aria-label="Open Extaggerated settings"
+						className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal)"
+						onClick={onOpenSettings}
+						title="Open Extaggerated settings"
+						type="button"
+					>
+						⚙
+					</button>
+					{mode === "tagging" ? (
+						<button
+							aria-label="Refresh file status"
+							className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal) disabled:cursor-not-allowed disabled:opacity-50"
+							disabled={queueLoading}
+							onClick={onRefreshQueue}
+							title="Refresh file status"
+							type="button"
+						>
+							↻
+						</button>
+					) : null}
+				</div>
+			</div>
+			{mode === "tagging" ? (
+				<FileStatusBar changedFiles={changedFiles} />
+			) : null}
+		</header>
+	);
+}
+
+function FileStatusBar({
+	changedFiles,
+}: {
+	changedFiles: ChangedFileQueueItem[];
+}) {
+	const statuses = [
+		{ className: "bg-(--interactive-accent)", label: "Tagged", type: "fresh" },
+		{
+			className: "bg-(--interactive-accent) opacity-40",
+			label: "Edited since tagging",
+			type: "stale",
+		},
+		{
+			className: "bg-(--text-muted) opacity-70",
+			label: "Never tagged",
+			type: "untagged",
+		},
+		{
+			className: "bg-(--background-modifier-border)",
+			label: "XT ignored",
+			type: "ignored",
+		},
+	] as const;
+
+	return (
+		<div
+			aria-label="File status distribution"
+			className="flex h-2 overflow-hidden rounded-full bg-(--background-primary-alt)"
+		>
+			{statuses.map((status) => {
+				const count = changedFiles.filter(
+					(file) => file.status === status.type,
+				).length;
+
+				return count > 0 ? (
+					<span
+						className={status.className}
+						key={status.type}
+						style={{ flexGrow: count }}
+						title={`${status.label}: ${count}`}
+					/>
+				) : null;
+			})}
+		</div>
 	);
 }
