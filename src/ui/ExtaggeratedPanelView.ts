@@ -7,7 +7,7 @@ import {
 	isTaggableFile,
 	type ChangedFileQueueItem,
 } from "../freshness";
-import { syncNoteTags } from "../noteSync";
+import { syncNoteTagBatch } from "../noteSync";
 import type { BatchSyncStatus } from "./ChangedFileQueue";
 import { TagAllConfirmationModal } from "./TagAllConfirmationModal";
 import {
@@ -182,16 +182,17 @@ export class ExtaggeratedPanelView extends ItemView {
 		this.render();
 
 		try {
-			for (const path of paths) {
+			const files = paths.flatMap((path) => {
 				const file = this.plugin.app.vault.getFileByPath(path);
 
 				if (!file) {
+					new Notice(`XT could not tag ${path}: file no longer exists.`, 8_000);
 					this.syncStatuses = {
 						...this.syncStatuses,
 						[path]: { message: "File no longer exists.", type: "failed" },
 					};
 					this.render();
-					continue;
+					return [];
 				}
 
 				this.syncStatuses = {
@@ -199,27 +200,34 @@ export class ExtaggeratedPanelView extends ItemView {
 					[path]: { type: "syncing" },
 				};
 				this.render();
+				return [file];
+			});
 
-				try {
-					const result = await syncNoteTags(this.plugin, file);
+			await syncNoteTagBatch(this.plugin, files, (outcome) => {
+				if (outcome.result) {
 					this.syncStatuses = {
 						...this.syncStatuses,
-						[path]: {
-							message: `${result.tagCount} tags`,
+						[outcome.file.path]: {
+							message: `${outcome.result.tagCount} tags`,
 							type: "synced",
 						},
 					};
-				} catch (error) {
+				} else {
+					const message = outcome.error?.message ?? "XT tag sync failed.";
+					new Notice(
+						`XT could not tag ${outcome.file.basename}: ${message}`,
+						8_000,
+					);
 					this.syncStatuses = {
 						...this.syncStatuses,
-						[path]: {
-							message: error instanceof Error ? error.message : String(error),
+						[outcome.file.path]: {
+							message,
 							type: "failed",
 						},
 					};
 				}
 				this.render();
-			}
+			});
 
 			await this.refreshQueue();
 		} finally {

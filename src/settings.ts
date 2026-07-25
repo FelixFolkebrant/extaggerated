@@ -2,14 +2,20 @@ import { type App, PluginSettingTab, Setting } from "obsidian";
 import type ExtaggeratedPlugin from "./main";
 
 export interface ExtaggeratedSettings {
+	maxBatchTokens: number;
 	openRouterApiKey: string;
 	model: string;
 }
 
 export const DEFAULT_SETTINGS: ExtaggeratedSettings = {
+	maxBatchTokens: 4000,
 	openRouterApiKey: "",
 	model: "google/gemini-3.1-flash-lite",
 };
+
+export function isValidBatchTokenBudget(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
 
 export class ExtaggeratedSettingTab extends PluginSettingTab {
 	constructor(
@@ -44,5 +50,25 @@ export class ExtaggeratedSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				});
 		});
+
+		new Setting(containerEl)
+			.setName("Maximum batch tokens")
+			.setDesc("Estimated token budget for each tagging request.")
+			.addText((text) => {
+				text.inputEl.inputMode = "numeric";
+				text.inputEl.min = "1";
+				text.inputEl.step = "1";
+				text
+					.setValue(String(this.plugin.settings.maxBatchTokens))
+					.onChange(async (value) => {
+						const maxBatchTokens = Number(value);
+						if (!isValidBatchTokenBudget(maxBatchTokens)) {
+							return;
+						}
+
+						this.plugin.settings.maxBatchTokens = maxBatchTokens;
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 }
