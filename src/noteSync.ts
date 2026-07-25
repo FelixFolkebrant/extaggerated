@@ -1,6 +1,6 @@
 import type { TFile } from "obsidian";
 import { Notice } from "obsidian";
-import { isFileIgnored } from "./freshness";
+import { hasXtTags, isFileIgnored } from "./freshness";
 import type ExtaggeratedPlugin from "./main";
 import { generateTags, hashNoteBody, noteBodyForHash } from "./tagging";
 
@@ -43,6 +43,42 @@ export async function syncActiveNoteTags(
 		const message = error instanceof Error ? error.message : String(error);
 		new Notice(`XT tag sync failed: ${message}`);
 	}
+}
+
+export async function ignoreActiveNote(
+	plugin: ExtaggeratedPlugin,
+): Promise<void> {
+	const file = plugin.app.workspace.getActiveFile();
+
+	if (file?.extension !== "md") {
+		new Notice("Open a markdown note before ignoring it.");
+		return;
+	}
+
+	if (isFileIgnored(plugin, file)) {
+		new Notice(`${file.basename} is already ignored by XT.`);
+		return;
+	}
+
+	const removesXtTags = hasXtTags(plugin, file);
+	if (
+		removesXtTags &&
+		!window.confirm(
+			`XT will remove the tags it created in ${file.basename} and its sync metadata, then set xt_ignore: true. Continue?`,
+		)
+	) {
+		return;
+	}
+
+	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+		if (removesXtTags) {
+			delete frontmatter.tags;
+			delete frontmatter.xt_content_hash;
+		}
+		frontmatter.xt_ignore = true;
+	});
+
+	new Notice(`XT now ignores ${file.basename}.`);
 }
 
 export async function syncNoteTags(

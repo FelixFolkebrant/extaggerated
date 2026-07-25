@@ -9,6 +9,7 @@ export type BatchSyncStatus =
 interface ChangedFileQueueProps {
 	changedFiles: ChangedFileQueueItem[];
 	hasApiKey: boolean;
+	onOpenSettings: () => void;
 	onRefreshQueue: () => void;
 	onSearchChange: (query: string) => void;
 	onSyncAll: () => void;
@@ -26,6 +27,7 @@ interface ChangedFileQueueProps {
 export function ChangedFileQueue({
 	changedFiles,
 	hasApiKey,
+	onOpenSettings,
 	onRefreshQueue,
 	onSearchChange,
 	onSyncAll,
@@ -64,16 +66,27 @@ export function ChangedFileQueue({
 						<XtMark className="h-auto w-12" />
 						<span className="sr-only">Extaggerated</span>
 					</div>
-					<button
-						aria-label="Refresh file status"
-						className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal) disabled:cursor-not-allowed disabled:opacity-50"
-						disabled={queueLoading}
-						onClick={onRefreshQueue}
-						title="Refresh file status"
-						type="button"
-					>
-						↻
-					</button>
+					<div className="flex items-center gap-1">
+						<button
+							aria-label="Open Extaggerated settings"
+							className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal)"
+							onClick={onOpenSettings}
+							title="Open Extaggerated settings"
+							type="button"
+						>
+							⚙
+						</button>
+						<button
+							aria-label="Refresh file status"
+							className="rounded p-1 text-lg text-(--text-muted) hover:text-(--text-normal) disabled:cursor-not-allowed disabled:opacity-50"
+							disabled={queueLoading}
+							onClick={onRefreshQueue}
+							title="Refresh file status"
+							type="button"
+						>
+							↻
+						</button>
+					</div>
 				</div>
 				<FileStatusBar changedFiles={changedFiles} />
 			</header>

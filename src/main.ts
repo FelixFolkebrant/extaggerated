@@ -1,5 +1,5 @@
 import { Notice, Plugin } from "obsidian";
-import { syncActiveNoteTags } from "./noteSync";
+import { ignoreActiveNote, syncActiveNoteTags } from "./noteSync";
 import {
 	DEFAULT_SETTINGS,
 	type ExtaggeratedSettings,
@@ -68,6 +68,17 @@ export default class ExtaggeratedPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	openSettings(): void {
+		const settings = (
+			this.app as typeof this.app & {
+				setting: { open: () => void; openTabById: (id: string) => void };
+			}
+		).setting;
+
+		settings.open();
+		settings.openTabById(this.manifest.id);
+	}
+
 	private async activateView(): Promise<void> {
 		for (const leaf of this.app.workspace.getLeavesOfType(XT_VIEW_TYPE)) {
 			leaf.detach();
@@ -106,18 +117,7 @@ export default class ExtaggeratedPlugin extends Plugin {
 	}
 
 	private async ignoreActiveNote(): Promise<void> {
-		const file = this.app.workspace.getActiveFile();
-
-		if (file?.extension !== "md") {
-			new Notice("Open a markdown note before ignoring it.");
-			return;
-		}
-
-		await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-			frontmatter.xt_ignore = true;
-		});
+		await ignoreActiveNote(this);
 		await this.refreshHeaderSyncIndicator?.();
-
-		new Notice(`XT will ignore ${file.basename}.`);
 	}
 }

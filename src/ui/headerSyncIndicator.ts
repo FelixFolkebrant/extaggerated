@@ -1,9 +1,11 @@
 import type ExtaggeratedPlugin from "../main";
+import { Menu } from "obsidian";
 import { getActiveNoteFreshness, type FreshnessStatus } from "../freshness";
+import { ignoreActiveNote, syncActiveNoteTags } from "../noteSync";
 import { renderXtMark } from "./XtMark";
 
 const indicatorClassName =
-	"me-(--size-2-1) inline-flex h-(--clickable-icon-size) min-w-(--clickable-icon-size) items-center justify-center [&>svg]:w-6";
+	"me-(--size-2-1) inline-flex h-(--clickable-icon-size) min-w-(--clickable-icon-size) cursor-pointer items-center justify-center rounded hover:bg-(--background-modifier-hover) [&>svg]:w-6";
 
 export function registerHeaderSyncIndicator(
 	plugin: ExtaggeratedPlugin,
@@ -29,11 +31,40 @@ export function registerHeaderSyncIndicator(
 		}
 
 		const display = headerSyncIndicatorDisplay(status);
-		indicatorEl = document.createElement("span");
+		indicatorEl = document.createElement("button");
 		indicatorEl.className = `${indicatorClassName} ${display.className}`;
 		renderXtMark(indicatorEl);
 		indicatorEl.setAttribute("aria-label", display.label);
+		indicatorEl.setAttribute("aria-haspopup", "menu");
 		indicatorEl.setAttribute("title", display.title);
+		indicatorEl.setAttribute("type", "button");
+		indicatorEl.addEventListener("click", (event) => {
+			const menu = new Menu();
+			menu.addItem((item) => {
+				item.setTitle(`Status: ${display.title}`).setDisabled(true);
+			});
+
+			if (status.type === "stale" || status.type === "untagged") {
+				menu.addItem((item) => {
+					item
+						.setIcon("refresh-cw")
+						.setTitle("Retag")
+						.onClick(() => {
+							void syncActiveNoteTags(plugin).then(requestRefresh);
+						});
+				});
+			}
+
+			menu.addItem((item) => {
+				item
+					.setIcon("circle-off")
+					.setTitle("Ignore with XT")
+					.onClick(() => {
+						void ignoreActiveNote(plugin).then(requestRefresh);
+					});
+			});
+			menu.showAtMouseEvent(event);
+		});
 
 		actionsEl.prepend(indicatorEl);
 	};
