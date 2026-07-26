@@ -1,15 +1,18 @@
 import { Buffer } from "node:buffer";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { build } from "esbuild";
 
 export async function importBundled(
 	entryPoint: string,
 	virtualModules: Record<string, string> = {},
+	externalPackages = false,
 ): Promise<Record<string, unknown>> {
 	const result = await build({
 		bundle: true,
 		entryPoints: [resolve(entryPoint)],
-		format: "esm",
+		format: externalPackages ? "cjs" : "esm",
+		packages: externalPackages ? "external" : undefined,
 		platform: "node",
 		plugins: [
 			{
@@ -29,8 +32,19 @@ export async function importBundled(
 		],
 		write: false,
 	});
+	const source = result.outputFiles[0].contents;
 
+	if (externalPackages) {
+		const checkModule = { exports: {} };
+		new Function(
+			"require",
+			"module",
+			"exports",
+			Buffer.from(source).toString(),
+		)(createRequire(import.meta.url), checkModule, checkModule.exports);
+		return checkModule.exports;
+	}
 	return import(
-		`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].contents).toString("base64")}`
+		`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 	);
 }

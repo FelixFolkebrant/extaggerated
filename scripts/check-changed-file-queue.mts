@@ -1,96 +1,23 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import { build } from "esbuild";
 import { importBundled } from "./bundle-test-module.mts";
 
 declare global {
 	var __batchCalls: number;
 	var __confirmationCounts: number[];
+	var __confirmationResolvers: Array<(confirmed: boolean) => void>;
 	var __confirmationResult: boolean;
+	var __deferConfirmation: boolean;
 	var __notices: string[];
 }
 
-const result = await build({
-	bundle: true,
-	format: "cjs",
-	jsx: "automatic",
-	packages: "external",
-	platform: "node",
-	plugins: [
-		{
-			name: "freshness-stub",
-			setup(build) {
-				build.onResolve({ filter: /^\.\.\/freshness$/ }, () => ({
-					namespace: "freshness-stub",
-					path: "freshness",
-				}));
-				build.onLoad({ filter: /.*/, namespace: "freshness-stub" }, () => ({
-					contents:
-						'export const isTaggableFile = (file) => file.status === "stale" || file.status === "untagged";',
-				}));
-			},
-		},
-	],
-	stdin: {
-		contents: `
-			import { createElement } from "react";
-			import { renderToStaticMarkup } from "react-dom/server";
-			import { ChangedFileQueue } from "./src/ui/ChangedFileQueue";
-			import { ExtaggeratedView } from "./src/ui/ExtaggeratedView";
-
-			const noop = () => {};
-			const props = {
-				changedFiles: [{
-					fileName: "Unreadable",
-					message: "Permission denied",
-					path: "Notes/Unreadable.md",
-					status: "unavailable",
-				}],
-				developerMode: false,
-				hasApiKey: true,
-				onOpenFailure: noop,
-				onOpenFile: noop,
-				onOpenNodeCreation: noop,
-				onOpenSettings: noop,
-				onRefreshQueue: noop,
-				onSearchChange: noop,
-				onSyncAll: noop,
-				onSyncSelected: noop,
-				onToggleQueuedFile: noop,
-				onToggleSortDirection: noop,
-				queueLoading: false,
-				searchQuery: "",
-				selectedPaths: ["Notes/Unreadable.md"],
-				sortAscending: true,
-				syncStatuses: {
-					"Notes/Unreadable.md": {
-						error: new Error("Old tag failure"),
-						type: "failed",
-					},
-				},
-				taggingPaths: ["Notes/Unreadable.md"],
-			};
-
-			export const queueHtml = renderToStaticMarkup(
-				createElement(ChangedFileQueue, props),
-			);
-			export const viewHtml = renderToStaticMarkup(
-				createElement(ExtaggeratedView, props),
-			);
-		`,
-		loader: "ts",
-		resolveDir: process.cwd(),
+const { queueHtml, viewHtml } = (await importBundled(
+	"scripts/fixtures/changed-file-queue-render.tsx",
+	{
+		"../freshness":
+			'export const isTaggableFile = (file) => file.status === "stale" || file.status === "untagged";',
 	},
-	write: false,
-});
-
-const checkModule = { exports: {} };
-new Function("require", "module", "exports", result.outputFiles[0].text)(
-	createRequire(import.meta.url),
-	checkModule,
-	checkModule.exports,
-);
-const { queueHtml, viewHtml } = checkModule.exports as {
+	true,
+)) as {
 	queueHtml: string;
 	viewHtml: string;
 };
@@ -136,6 +63,11 @@ const panelModule = await importBundled("src/ui/ExtaggeratedPanelView.ts", {
 				globalThis.__confirmationCounts.push(count);
 			}
 			async openAndWait() {
+				if (globalThis.__deferConfirmation) {
+					return new Promise((resolve) => {
+						globalThis.__confirmationResolvers.push(resolve);
+					});
+				}
 				return globalThis.__confirmationResult;
 			}
 		}
@@ -167,18 +99,14 @@ const queuedFile = {
 	extension: "md",
 	path: "Notes/Queued.md",
 };
+const app = {
+	metadataCache: { getFileCache: () => ({}) },
+	vault: { getFileByPath: () => queuedFile },
+};
 const panel = new PanelView(
+	{ app },
 	{
-		app: {
-			metadataCache: { getFileCache: () => ({}) },
-			vault: { getFileByPath: () => queuedFile },
-		},
-	},
-	{
-		app: {
-			metadataCache: { getFileCache: () => ({}) },
-			vault: { getFileByPath: () => queuedFile },
-		},
+		app,
 		settings: {
 			developerMode: false,
 			openRouterApiKey: "secret",
@@ -191,7 +119,9 @@ panel.changedFiles = [
 panel.selectedPaths = new Set([queuedFile.path]);
 globalThis.__batchCalls = 0;
 globalThis.__confirmationCounts = [];
+globalThis.__confirmationResolvers = [];
 globalThis.__confirmationResult = false;
+globalThis.__deferConfirmation = false;
 globalThis.__notices = [];
 
 panel.viewState().onSyncSelected();
@@ -205,3 +135,20 @@ await new Promise((resolve) => setImmediate(resolve));
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(globalThis.__batchCalls, 1);
 assert.deepEqual(globalThis.__confirmationCounts, [1, 1]);
+
+panel.changedFiles = [
+	{ fileName: "Queued", path: queuedFile.path, status: "stale" },
+];
+panel.selectedPaths = new Set([queuedFile.path]);
+globalThis.__deferConfirmation = true;
+panel.viewState().onSyncSelected();
+panel.viewState().onSyncSelected();
+await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual(globalThis.__confirmationCounts, [1, 1, 1]);
+assert.equal(globalThis.__confirmationResolvers.length, 1);
+assert.equal(globalThis.__batchCalls, 1);
+
+globalThis.__confirmationResolvers[0](true);
+await new Promise((resolve) => setImmediate(resolve));
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(globalThis.__batchCalls, 2);

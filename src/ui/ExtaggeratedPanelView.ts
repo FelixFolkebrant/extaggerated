@@ -29,6 +29,7 @@ export class ExtaggeratedPanelView extends ItemView {
 	private sortAscending = true;
 	private syncStatuses: Record<string, BatchSyncStatus> = {};
 	private taggingPaths = new Set<string>();
+	private syncInFlight = false;
 	private nodeCreating = false;
 
 	constructor(
@@ -211,7 +212,7 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private async syncQueuedFiles(paths: string[]): Promise<void> {
-		if (this.taggingPaths.size > 0) {
+		if (this.syncInFlight) {
 			return;
 		}
 
@@ -225,65 +226,72 @@ export class ExtaggeratedPanelView extends ItemView {
 			return;
 		}
 
-		const confirmed = await new TagConfirmationModal(
-			this.app,
-			paths.length,
-		).openAndWait();
-		if (!confirmed) {
-			return;
-		}
-
-		this.taggingPaths = new Set(paths);
-
+		this.syncInFlight = true;
 		try {
-			const nextSyncStatuses: Record<string, BatchSyncStatus> = {
-				...this.syncStatuses,
-			};
-			const files = paths.flatMap((path) => {
-				const file = this.plugin.app.vault.getFileByPath(path);
+			const confirmed = await new TagConfirmationModal(
+				this.app,
+				paths.length,
+			).openAndWait();
+			if (!confirmed) {
+				return;
+			}
 
-				if (!file) {
-					new Notice(`XT could not tag ${path}: file no longer exists.`, 8_000);
-					nextSyncStatuses[path] = {
-						error: new Error("File no longer exists."),
-						type: "failed",
-					};
-					return [];
-				}
+			this.taggingPaths = new Set(paths);
+			try {
+				const nextSyncStatuses: Record<string, BatchSyncStatus> = {
+					...this.syncStatuses,
+				};
+				const files = paths.flatMap((path) => {
+					const file = this.plugin.app.vault.getFileByPath(path);
 
-				nextSyncStatuses[path] = { type: "syncing" };
-				return [file];
-			});
-			this.syncStatuses = nextSyncStatuses;
-			this.render();
+					if (!file) {
+						new Notice(
+							`XT could not tag ${path}: file no longer exists.`,
+							8_000,
+						);
+						nextSyncStatuses[path] = {
+							error: new Error("File no longer exists."),
+							type: "failed",
+						};
+						return [];
+					}
 
-			await syncNoteTagBatch(this.plugin, files, (outcome) => {
-				if (outcome.result) {
-					this.syncStatuses = {
-						...this.syncStatuses,
-						[outcome.file.path]: {
-							message: `${outcome.result.tagCount} tags`,
-							type: "synced",
-						},
-					};
-				} else {
-					const error = outcome.error ?? new Error("XT tag sync failed.");
-					new Notice(
-						`XT could not tag ${outcome.file.basename}: ${error.message}`,
-						8_000,
-					);
-					this.syncStatuses = {
-						...this.syncStatuses,
-						[outcome.file.path]: { error, type: "failed" },
-					};
-				}
+					nextSyncStatuses[path] = { type: "syncing" };
+					return [file];
+				});
+				this.syncStatuses = nextSyncStatuses;
 				this.render();
-			});
 
-			await this.refreshQueue();
+				await syncNoteTagBatch(this.plugin, files, (outcome) => {
+					if (outcome.result) {
+						this.syncStatuses = {
+							...this.syncStatuses,
+							[outcome.file.path]: {
+								message: `${outcome.result.tagCount} tags`,
+								type: "synced",
+							},
+						};
+					} else {
+						const error = outcome.error ?? new Error("XT tag sync failed.");
+						new Notice(
+							`XT could not tag ${outcome.file.basename}: ${error.message}`,
+							8_000,
+						);
+						this.syncStatuses = {
+							...this.syncStatuses,
+							[outcome.file.path]: { error, type: "failed" },
+						};
+					}
+					this.render();
+				});
+
+				await this.refreshQueue();
+			} finally {
+				this.taggingPaths.clear();
+				this.render();
+			}
 		} finally {
-			this.taggingPaths.clear();
-			this.render();
+			this.syncInFlight = false;
 		}
 	}
 }
