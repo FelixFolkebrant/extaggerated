@@ -1,8 +1,6 @@
 import { Modal } from "obsidian";
 import type { NodeDraft } from "../nodeGeneration";
 
-export type { NodeDraft } from "../nodeGeneration";
-
 export class NodeCreationModal extends Modal {
 	private description = "";
 	private name = "";

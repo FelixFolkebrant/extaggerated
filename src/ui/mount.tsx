@@ -5,9 +5,7 @@ import {
 	type ExtaggeratedViewProps,
 } from "./ExtaggeratedView";
 
-export type ExtaggeratedViewState = ExtaggeratedViewProps;
-
-interface MountExtaggeratedViewOptions extends ExtaggeratedViewState {
+interface MountExtaggeratedViewOptions extends ExtaggeratedViewProps {
 	container: HTMLElement;
 }
 
@@ -22,7 +20,7 @@ export function mountExtaggeratedView({
 
 export function renderExtaggeratedView(
 	root: Root,
-	state: ExtaggeratedViewState,
+	state: ExtaggeratedViewProps,
 ): void {
 	root.render(
 		<StrictMode>
