@@ -2,7 +2,7 @@ import type { TFile } from "obsidian";
 import { Notice } from "obsidian";
 import { hasXtTags, isFileIgnored } from "./freshness";
 import type ExtaggeratedPlugin from "./main";
-import { groupByTokenBudget, estimateTokens } from "./tagBatching";
+import { estimateTokens, groupByTokenBudget } from "./tagBatching";
 import { generateTagsForNotes, hashNoteBody, noteBodyForHash } from "./tagging";
 
 export interface SyncNoteTagsResult {
@@ -61,17 +61,17 @@ export async function syncActiveNoteTags(
 
 export async function ignoreActiveNote(
 	plugin: ExtaggeratedPlugin,
-): Promise<void> {
+): Promise<boolean> {
 	const file = plugin.app.workspace.getActiveFile();
 
 	if (file?.extension !== "md") {
 		new Notice("Open a markdown note before ignoring it.");
-		return;
+		return false;
 	}
 
 	if (isFileIgnored(plugin, file)) {
 		new Notice(`${file.basename} is already ignored by XT.`);
-		return;
+		return false;
 	}
 
 	const removesXtTags = hasXtTags(plugin, file);
@@ -81,19 +81,25 @@ export async function ignoreActiveNote(
 			`XT will remove the tags it created in ${file.basename} and its sync metadata, then set xt_ignore: true. Continue?`,
 		)
 	) {
-		return;
+		return false;
 	}
 
-	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
-		if (removesXtTags) {
-			delete frontmatter.tags;
-			delete frontmatter.xt_content_hash;
-		}
-		delete frontmatter.xt_failure;
-		frontmatter.xt_ignore = true;
-	});
+	try {
+		await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			if (removesXtTags) {
+				delete frontmatter.tags;
+				delete frontmatter.xt_content_hash;
+			}
+			delete frontmatter.xt_failure;
+			frontmatter.xt_ignore = true;
+		});
+	} catch (error) {
+		new Notice(`Could not ignore ${file.path}: ${toError(error).message}`);
+		return false;
+	}
 
 	new Notice(`XT now ignores ${file.basename}.`);
+	return true;
 }
 
 export async function clearXtStateFromActiveNote(
@@ -119,7 +125,15 @@ export async function clearXtStateFromActiveNote(
 		return false;
 	}
 
-	await clearXtState(plugin, file);
+	try {
+		await clearXtState(plugin, file);
+	} catch (error) {
+		new Notice(
+			`Could not clear XT metadata from ${file.path}: ${toError(error).message}`,
+		);
+		return false;
+	}
+
 	new Notice(`Cleared XT metadata from ${file.basename}.`);
 	return true;
 }
@@ -144,8 +158,21 @@ export async function clearXtStateFromVault(
 		return;
 	}
 
+	const failures: string[] = [];
 	for (const file of files) {
-		await clearXtState(plugin, file);
+		try {
+			await clearXtState(plugin, file);
+		} catch (error) {
+			failures.push(`${file.path}: ${toError(error).message}`);
+		}
+	}
+
+	const cleared = files.length - failures.length;
+	if (failures.length > 0) {
+		new Notice(
+			`Cleared XT metadata from ${cleared} of ${files.length} notes. Failed: ${failures.join("; ")}`,
+		);
+		return;
 	}
 
 	new Notice(
@@ -257,6 +284,11 @@ async function writeTags(
 	tags: string[],
 	contentHash: string,
 ): Promise<void> {
+	const currentHash = await hashNoteBody(await plugin.app.vault.read(file));
+	if (currentHash !== contentHash) {
+		throw new Error(`${file.basename} changed while XT was generating tags.`);
+	}
+
 	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
 		frontmatter.tags = tags;
 		frontmatter.xt_content_hash = contentHash;

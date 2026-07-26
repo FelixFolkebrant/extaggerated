@@ -9,7 +9,7 @@ import {
 	DEFAULT_SETTINGS,
 	type ExtaggeratedSettings,
 	ExtaggeratedSettingTab,
-	isValidBatchTokenBudget,
+	parseSettings,
 } from "./settings";
 import {
 	ExtaggeratedPanelView,
@@ -54,7 +54,7 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "ignore-active-note",
 			name: "Ignore active note",
 			callback: () => {
-				void this.ignoreActiveNote();
+				this.runCommand("Ignore active note failed", this.ignoreActiveNote());
 			},
 		});
 
@@ -62,7 +62,10 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "debug-clear-xt-state-active-note",
 			name: "Debug: Clear XT metadata from active note",
 			callback: () => {
-				void this.clearXtStateFromActiveNote();
+				this.runCommand(
+					"Clearing XT metadata from the active note failed",
+					this.clearXtStateFromActiveNote(),
+				);
 			},
 		});
 
@@ -70,7 +73,10 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "debug-clear-xt-state-vault",
 			name: "Debug: Clear XT metadata from all notes",
 			callback: () => {
-				void clearXtStateFromVault(this);
+				this.runCommand(
+					"Clearing XT metadata from the vault failed",
+					clearXtStateFromVault(this),
+				);
 			},
 		});
 
@@ -80,15 +86,7 @@ export default class ExtaggeratedPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const loadedSettings =
-			(await this.loadData()) as Partial<ExtaggeratedSettings> | null;
-		this.settings = {
-			...DEFAULT_SETTINGS,
-			...loadedSettings,
-			maxBatchTokens: isValidBatchTokenBudget(loadedSettings?.maxBatchTokens)
-				? loadedSettings.maxBatchTokens
-				: DEFAULT_SETTINGS.maxBatchTokens,
-		};
+		this.settings = parseSettings(await this.loadData());
 	}
 
 	async saveSettings(): Promise<void> {
@@ -104,6 +102,14 @@ export default class ExtaggeratedPlugin extends Plugin {
 
 		settings.open();
 		settings.openTabById(this.manifest.id);
+	}
+
+	private runCommand(failureMessage: string, command: Promise<void>): void {
+		void command.catch((error) => {
+			new Notice(
+				`${failureMessage}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		});
 	}
 
 	private async activateView(): Promise<void> {
@@ -144,8 +150,9 @@ export default class ExtaggeratedPlugin extends Plugin {
 	}
 
 	private async ignoreActiveNote(): Promise<void> {
-		await ignoreActiveNote(this);
-		await this.refreshHeaderSyncIndicator?.();
+		if (await ignoreActiveNote(this)) {
+			await this.refreshHeaderSyncIndicator?.();
+		}
 	}
 
 	private async clearXtStateFromActiveNote(): Promise<void> {
