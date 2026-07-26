@@ -198,6 +198,10 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private async syncQueuedFiles(paths: string[]): Promise<void> {
+		if (this.taggingPaths.size > 0) {
+			return;
+		}
+
 		if (paths.length === 0) {
 			new Notice("Select at least one queued note to sync.");
 			return;

@@ -38,6 +38,7 @@ export function ChangedFileQueue({
 }: ChangedFileQueueProps) {
 	const selected = new Set(selectedPaths);
 	const tagging = new Set(taggingPaths);
+	const isTagging = tagging.size > 0;
 	const syncableCount = changedFiles.filter(isTaggableFile).length;
 	const selectedSyncableCount = changedFiles.filter(
 		(file) => isTaggableFile(file) && selected.has(file.path),
@@ -70,7 +71,12 @@ export function ChangedFileQueue({
 			<div className="mx-3 grid grid-cols-2 gap-3">
 				<button
 					className="rounded bg-(--interactive-accent) px-3 py-2 text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-60"
-					disabled={!hasApiKey || queueLoading || selectedSyncableCount === 0}
+					disabled={
+						!hasApiKey ||
+						queueLoading ||
+						isTagging ||
+						selectedSyncableCount === 0
+					}
 					onClick={onSyncSelected}
 					type="button"
 				>
@@ -78,7 +84,9 @@ export function ChangedFileQueue({
 				</button>
 				<button
 					className="rounded bg-(--background-primary-alt) px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-					disabled={!hasApiKey || queueLoading || syncableCount === 0}
+					disabled={
+						!hasApiKey || queueLoading || isTagging || syncableCount === 0
+					}
 					onClick={onSyncAll}
 					type="button"
 				>
@@ -217,7 +225,14 @@ function RowEnd({
 	}
 
 	if (syncStatus?.type === "failed") {
-		return <span className="text-(--color-red)">!</span>;
+		return (
+			<span
+				className="max-w-32 truncate text-xs text-(--color-red)"
+				title={syncStatus.message}
+			>
+				{syncStatus.message}
+			</span>
+		);
 	}
 
 	return file.status === "untagged" ? (
