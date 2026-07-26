@@ -24,6 +24,8 @@ export interface ChangedFileQueueItem {
 	message?: string;
 }
 
+const XT_FAILURE_PROPERTY = "xt_failure";
+
 export async function getActiveNoteFreshness(
 	plugin: ExtaggeratedPlugin,
 ): Promise<FreshnessStatus> {
@@ -113,4 +115,36 @@ export function isFileIgnored(
 
 export function hasXtTags(plugin: ExtaggeratedPlugin, file: TFile): boolean {
 	return frontmatterHash(plugin, file) !== null;
+}
+
+export function getXtFailure(
+	plugin: ExtaggeratedPlugin,
+	file: TFile,
+): Error | null {
+	const value =
+		plugin.app.metadataCache.getFileCache(file)?.frontmatter?.[
+			XT_FAILURE_PROPERTY
+		];
+
+	if (typeof value === "string" && value.length > 0) {
+		return new Error(value);
+	}
+
+	if (
+		typeof value !== "object" ||
+		value === null ||
+		!("message" in value) ||
+		typeof value.message !== "string"
+	) {
+		return null;
+	}
+
+	const error = new Error(value.message);
+	if ("name" in value && typeof value.name === "string") {
+		error.name = value.name;
+	}
+	if ("stack" in value && typeof value.stack === "string") {
+		error.stack = value.stack;
+	}
+	return error;
 }

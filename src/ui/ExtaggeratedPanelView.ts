@@ -4,6 +4,7 @@ import type { Root } from "react-dom/client";
 import type ExtaggeratedPlugin from "../main";
 import {
 	getChangedFileQueue,
+	getXtFailure,
 	isTaggableFile,
 	type ChangedFileQueueItem,
 } from "../freshness";
@@ -161,11 +162,21 @@ export class ExtaggeratedPanelView extends ItemView {
 		}
 
 		this.changedFiles = changedFiles;
+		this.syncStatuses = Object.fromEntries(
+			changedFiles.flatMap((item) => {
+				const file = this.plugin.app.vault.getFileByPath(item.path);
+				const error =
+					item.status === "ignored" || !file
+						? null
+						: getXtFailure(this.plugin, file);
+				return error ? [[item.path, { error, type: "failed" }]] : [];
+			}),
+		);
 		this.queueLoading = false;
 		this.selectedPaths = new Set(
 			[...this.selectedPaths].filter((path) =>
 				this.changedFiles.some(
-					(file) => file.path === path && isTaggableFile(file),
+					(file) => file.path === path && this.isSyncableFile(file),
 				),
 			),
 		);
@@ -183,7 +194,16 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private syncableQueuePaths(): string[] {
-		return this.changedFiles.filter(isTaggableFile).map((file) => file.path);
+		return this.changedFiles
+			.filter((file) => this.isSyncableFile(file))
+			.map((file) => file.path);
+	}
+
+	private isSyncableFile(file: ChangedFileQueueItem): boolean {
+		return (
+			file.status !== "ignored" &&
+			(isTaggableFile(file) || this.syncStatuses[file.path]?.type === "failed")
+		);
 	}
 
 	private async confirmAndSyncAll(): Promise<void> {

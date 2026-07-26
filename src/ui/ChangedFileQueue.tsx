@@ -43,11 +43,14 @@ export function ChangedFileQueue({
 	const selected = new Set(selectedPaths);
 	const tagging = new Set(taggingPaths);
 	const isTagging = tagging.size > 0;
-	const syncableCount = changedFiles.filter(isTaggableFile).length;
+	const isSyncable = (file: ChangedFileQueueItem) =>
+		file.status !== "ignored" &&
+		(isTaggableFile(file) || syncStatuses[file.path]?.type === "failed");
+	const syncableCount = changedFiles.filter(isSyncable).length;
 	const selectedSyncableCount = changedFiles.filter(
-		(file) => isTaggableFile(file) && selected.has(file.path),
+		(file) => isSyncable(file) && selected.has(file.path),
 	).length;
-	const queueFiles = changedFiles.filter(isTaggableFile).sort((a, b) => {
+	const queueFiles = changedFiles.filter(isSyncable).sort((a, b) => {
 		const order = a.path.localeCompare(b.path);
 		return sortAscending ? order : -order;
 	});
@@ -213,7 +216,7 @@ function ChangedFileQueueRow({
 	tagging,
 }: ChangedFileQueueRowProps) {
 	const status = queueStatusDisplay(file);
-	const taggable = isTaggableFile(file);
+	const taggable = isTaggableFile(file) || syncStatus?.type === "failed";
 	const selectionClassName = selected ? "opacity-100" : "opacity-50";
 
 	if (tagging) {

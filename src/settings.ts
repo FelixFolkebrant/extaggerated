@@ -1,4 +1,4 @@
-import { type App, PluginSettingTab, Setting } from "obsidian";
+import { Notice, type App, PluginSettingTab, Setting } from "obsidian";
 import type ExtaggeratedPlugin from "./main";
 
 export interface ExtaggeratedSettings {
@@ -47,13 +47,16 @@ export class ExtaggeratedSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Developer mode")
-			.setDesc("Show copyable details for failed tag syncs.")
+			.setDesc(
+				"Show copyable details for failed tag syncs. Restart Obsidian after changing this setting.",
+			)
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.developerMode)
 					.onChange(async (value) => {
 						this.plugin.settings.developerMode = value;
 						await this.plugin.saveSettings();
+						new Notice("Restart Obsidian to apply the Developer mode change.");
 					});
 			});
 
