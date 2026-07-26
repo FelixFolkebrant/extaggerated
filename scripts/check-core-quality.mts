@@ -193,6 +193,7 @@ const file = {
 async function syncWithReads(reads: string[]) {
 	let readIndex = 0;
 	const frontmatter: Record<string, unknown> = {};
+	let frontmatterWriteCount = 0;
 	let writtenMarkdown: string | undefined;
 	let outcome: { error?: Error; result?: { tagCount: number } } | undefined;
 	const plugin = {
@@ -201,7 +202,10 @@ async function syncWithReads(reads: string[]) {
 				processFrontMatter: async (
 					_file: unknown,
 					mutate: (value: Record<string, unknown>) => void,
-				) => mutate(frontmatter),
+				) => {
+					frontmatterWriteCount += 1;
+					mutate(frontmatter);
+				},
 			},
 			metadataCache: { getFileCache: () => ({ frontmatter }) },
 			vault: {
@@ -233,7 +237,13 @@ async function syncWithReads(reads: string[]) {
 	await syncNoteTagBatch(plugin, [file], (value) => {
 		outcome = value;
 	});
-	return { frontmatter, outcome, readCount: readIndex, writtenMarkdown };
+	return {
+		frontmatter,
+		frontmatterWriteCount,
+		outcome,
+		readCount: readIndex,
+		writtenMarkdown,
+	};
 }
 
 const changed = await syncWithReads(["Original body", "Edited body"]);
@@ -261,6 +271,7 @@ const nonMapping = await syncWithReads([
 	'---\n["keep-me"]\n---\nSame body',
 ]);
 assert.equal(nonMapping.writtenMarkdown, undefined);
+assert.equal(nonMapping.frontmatterWriteCount, 0);
 assert.equal(nonMapping.frontmatter.tags, undefined);
 assert.match(
 	nonMapping.outcome?.error?.message ?? "",

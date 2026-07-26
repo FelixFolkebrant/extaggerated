@@ -22,6 +22,8 @@ interface PreparedNote {
 	estimatedTokens: number;
 }
 
+class UnsupportedFrontmatterError extends Error {}
+
 export async function syncActiveNoteTags(
 	plugin: ExtaggeratedPlugin,
 ): Promise<void> {
@@ -272,7 +274,12 @@ export async function syncNoteTagBatch(
 					);
 					onComplete({ file: note.file, result: { tagCount: tags.length } });
 				} catch (error) {
-					await completeFailure(plugin, note.file, toError(error), onComplete);
+					const failure = toError(error);
+					if (failure instanceof UnsupportedFrontmatterError) {
+						onComplete({ error: failure, file: note.file });
+					} else {
+						await completeFailure(plugin, note.file, failure, onComplete);
+					}
 				}
 			}
 		} catch (error) {
@@ -318,7 +325,9 @@ function updateFrontmatter(
 			parsed === null ||
 			Array.isArray(parsed)
 		) {
-			throw new Error("XT cannot tag a note with non-mapping frontmatter.");
+			throw new UnsupportedFrontmatterError(
+				"XT cannot tag a note with non-mapping frontmatter.",
+			);
 		}
 		frontmatter = parsed;
 	}
