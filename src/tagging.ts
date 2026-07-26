@@ -29,9 +29,10 @@ export function normalizeTags(tags: string[]): string[] {
 		const value = tag
 			.trim()
 			.toLowerCase()
+			.normalize("NFC")
 			.replace(/^#/, "")
 			.replace(/['"]/g, "")
-			.replace(/[^\p{L}\p{N}]+/gu, "-")
+			.replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
 			.replace(/^-+|-+$/g, "");
 
 		if (value.length === 0 || seen.has(value)) {

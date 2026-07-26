@@ -1,55 +1,65 @@
 import assert from "node:assert/strict";
-import { Buffer } from "node:buffer";
-import { resolve } from "node:path";
-import { build } from "esbuild";
+import { importBundled } from "./bundle-test-module.mts";
 
 declare global {
 	var __notices: string[];
 	var __openRouterResponse: unknown;
+	var __pluginApp: unknown;
+	var __savedSettings: unknown;
 }
 
+const OBSIDIAN_STUB = `
+	export class Notice {
+		constructor(message) {
+			globalThis.__notices.push(String(message));
+		}
+	}
+	export class Plugin {
+		constructor() {
+			this.app = globalThis.__pluginApp;
+			this.manifest = { id: "extaggerated" };
+			this.commands = [];
+		}
+		addCommand(command) { this.commands.push(command); }
+		addRibbonIcon(_icon, _name, callback) { this.ribbonCallback = callback; }
+		addSettingTab() {}
+		register() {}
+		registerEvent() {}
+		registerView() {}
+		loadData() { return Promise.resolve(globalThis.__savedSettings); }
+	}
+	export class PluginSettingTab {}
+	export class Setting {}
+	export class ItemView {}
+	export class Modal {}
+	export class Menu {}
+	export class TFolder {}
+	export function requestUrl() { throw new Error("provider called"); }
+	export function getFrontMatterInfo(content) {
+		const match = /^---\\r?\\n([\\s\\S]*?)\\r?\\n---\\r?\\n?/.exec(content);
+		if (!match) {
+			return { contentStart: 0, exists: false, from: 0, frontmatter: "", to: 0 };
+		}
+		const from = content.indexOf("\\n") + 1;
+		return {
+			contentStart: match[0].length,
+			exists: true,
+			from,
+			frontmatter: match[1],
+			to: from + match[1].length,
+		};
+	}
+	export const parseYaml = JSON.parse;
+	export const stringifyYaml = JSON.stringify;
+`;
+
 async function loadModule(path: string): Promise<Record<string, unknown>> {
-	const result = await build({
-		bundle: true,
-		entryPoints: [resolve(path)],
-		format: "esm",
-		platform: "node",
-		plugins: [
-			{
-				name: "obsidian-stub",
-				setup(build) {
-					build.onResolve({ filter: /^obsidian$/ }, () => ({
-						namespace: "stub",
-						path: "obsidian",
-					}));
-					build.onResolve({ filter: /^\.\/openRouter$/ }, () => ({
-						namespace: "stub",
-						path: "openRouter",
-					}));
-					build.onLoad({ filter: /.*/, namespace: "stub" }, ({ path }) => ({
-						contents:
-							path === "obsidian"
-								? `export class Notice {
-										constructor(message) {
-											globalThis.__notices.push(String(message));
-										}
-									}
-									export class PluginSettingTab {}
-									export class Setting {}`
-								: `export async function requestOpenRouterJson() {
-										return globalThis.__openRouterResponse;
-									}`,
-						loader: "js",
-					}));
-				},
-			},
-		],
-		write: false,
+	return importBundled(path, {
+		"./openRouter": `export async function requestOpenRouterJson() {
+			return globalThis.__openRouterResponse;
+		}`,
+		obsidian: OBSIDIAN_STUB,
 	});
-	const source = result.outputFiles[0].contents;
-	return import(
-		`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
-	);
 }
 
 const { DEFAULT_SETTINGS, parseSettings } = (await loadModule(
@@ -91,12 +101,30 @@ assert.deepEqual(
 );
 assert.deepEqual(parseSettings(null), DEFAULT_SETTINGS);
 
-const { generateTagsForNotes } = (await loadModule("src/tagging.ts")) as {
+globalThis.__notices = [];
+globalThis.__savedSettings = { ...validSettings, maxBatchTokens: "many" };
+const PluginClass = (await loadModule("src/main.ts")).default as new () => {
+	commands: Array<{ id: string; callback: () => void }>;
+	loadSettings: () => Promise<void>;
+	onload: () => Promise<void>;
+	settings: Record<string, unknown>;
+};
+const settingsPlugin = new PluginClass();
+await settingsPlugin.loadSettings();
+assert.deepEqual(settingsPlugin.settings, {
+	...validSettings,
+	maxBatchTokens: DEFAULT_SETTINGS.maxBatchTokens,
+});
+
+const { generateTagsForNotes, hashNoteBody } = (await loadModule(
+	"src/tagging.ts",
+)) as {
 	generateTagsForNotes: (request: {
 		apiKey: string;
 		model: string;
 		notes: Array<{ id: string; noteText: string }>;
 	}) => Promise<Map<string, string[]>>;
+	hashNoteBody: (markdown: string) => Promise<string>;
 };
 const taggingRequest = {
 	apiKey: "secret",
@@ -107,14 +135,22 @@ globalThis.__openRouterResponse = {
 	results: [
 		{
 			id: "0",
-			tags: ["#Säkerhet", "東京 2026", "crème brûlée", "säkerhet"],
+			tags: [
+				"#Säkerhet",
+				"東京 ２０２６",
+				"Cafe\u0301",
+				"café",
+				"हिन्दी",
+				"säkerhet",
+			],
 		},
 	],
 };
 assert.deepEqual((await generateTagsForNotes(taggingRequest)).get("0"), [
 	"säkerhet",
-	"東京-2026",
-	"crème-brûlée",
+	"東京-２０２６",
+	"café",
+	"हिन्दी",
 ]);
 globalThis.__openRouterResponse = {
 	results: [{ id: "0", tags: ["security", 42] }],
@@ -151,6 +187,7 @@ const file = {
 async function syncWithReads(reads: string[]) {
 	let readIndex = 0;
 	const frontmatter: Record<string, unknown> = {};
+	let writtenMarkdown: string | undefined;
 	let outcome: { error?: Error; result?: { tagCount: number } } | undefined;
 	const plugin = {
 		app: {
@@ -163,6 +200,18 @@ async function syncWithReads(reads: string[]) {
 			metadataCache: { getFileCache: () => ({ frontmatter }) },
 			vault: {
 				read: async () => reads[Math.min(readIndex++, reads.length - 1)],
+				process: async (
+					_file: unknown,
+					mutate: (markdown: string) => string,
+				) => {
+					const current = reads[Math.min(readIndex++, reads.length - 1)];
+					writtenMarkdown = mutate(current);
+					const info = /^---\n([\s\S]*?)\n---\n?/.exec(writtenMarkdown);
+					if (info) {
+						Object.assign(frontmatter, JSON.parse(info[1]));
+					}
+					return writtenMarkdown;
+				},
 			},
 		},
 		settings: {
@@ -178,7 +227,7 @@ async function syncWithReads(reads: string[]) {
 	await syncNoteTagBatch(plugin, [file], (value) => {
 		outcome = value;
 	});
-	return { frontmatter, outcome, readCount: readIndex };
+	return { frontmatter, outcome, readCount: readIndex, writtenMarkdown };
 }
 
 const changed = await syncWithReads(["Original body", "Edited body"]);
@@ -190,15 +239,81 @@ assert.match(
 	/changed while XT/,
 );
 
+const withoutFrontmatter = await syncWithReads(["Same body", "Same body"]);
+assert.deepEqual(withoutFrontmatter.frontmatter.tags, ["security"]);
+assert.equal(
+	withoutFrontmatter.frontmatter.xt_content_hash,
+	await hashNoteBody("Same body"),
+);
+assert.match(
+	withoutFrontmatter.writtenMarkdown ?? "",
+	/^---\n\{"tags":\["security"\],"xt_content_hash":"[a-f\d]{64}"\}\n---\nSame body$/,
+);
+
 const frontmatterOnly = await syncWithReads([
-	"---\ntitle: Before\n---\nSame body",
-	"---\ntitle: After\n---\nSame body",
+	'---\n{"title":"Before","xt_failure":{"message":"old"}}\n---\nSame body',
+	'---\n{"title":"After","xt_failure":{"message":"old"}}\n---\nSame body',
 ]);
 assert.deepEqual(frontmatterOnly.frontmatter.tags, ["security"]);
 assert.deepEqual(frontmatterOnly.outcome?.result, { tagCount: 1 });
+assert.equal(
+	frontmatterOnly.frontmatter.xt_content_hash,
+	await hashNoteBody("Same body"),
+);
+assert.equal(frontmatterOnly.frontmatter.xt_failure, undefined);
+assert.match(frontmatterOnly.writtenMarkdown ?? "", /"title":"After"/);
 
 Object.assign(globalThis, { window: { confirm: () => true } });
 globalThis.__notices = [];
+function activePlugin(frontmatter: Record<string, unknown>) {
+	return {
+		app: {
+			fileManager: {
+				processFrontMatter: async (
+					_file: unknown,
+					mutate: (value: Record<string, unknown>) => void,
+				) => mutate(frontmatter),
+			},
+			metadataCache: { getFileCache: () => ({ frontmatter }) },
+			workspace: { getActiveFile: () => file },
+		},
+	};
+}
+
+const ownedTags = {
+	tags: ["xt-tag"],
+	title: "Keep me",
+	xt_content_hash: "owned",
+	xt_failure: { message: "old" },
+};
+assert.equal(await ignoreActiveNote(activePlugin(ownedTags)), true);
+assert.deepEqual(ownedTags, { title: "Keep me", xt_ignore: true });
+
+const userTags = {
+	tags: ["user-tag"],
+	title: "Keep me",
+	xt_failure: { message: "old" },
+};
+assert.equal(await ignoreActiveNote(activePlugin(userTags)), true);
+assert.deepEqual(userTags, {
+	tags: ["user-tag"],
+	title: "Keep me",
+	xt_ignore: true,
+});
+
+const activeCleanup = {
+	tags: ["xt-tag"],
+	title: "Keep me",
+	xt_content_hash: "owned",
+	xt_failure: { message: "old" },
+	xt_ignore: true,
+};
+assert.equal(
+	await clearXtStateFromActiveNote(activePlugin(activeCleanup)),
+	true,
+);
+assert.deepEqual(activeCleanup, { title: "Keep me" });
+
 const failingActivePlugin = {
 	app: {
 		fileManager: {
@@ -233,6 +348,19 @@ const cleanupFiles = ["a.md", "b.md", "c.md"].map((path) => ({
 	path,
 }));
 const attempted: string[] = [];
+const cleanupFrontmatter = new Map<string, Record<string, unknown>>([
+	[
+		"a.md",
+		{
+			tags: ["xt-tag"],
+			title: "A",
+			xt_content_hash: "owned",
+			xt_failure: { message: "old" },
+		},
+	],
+	["b.md", { title: "B", xt_ignore: true }],
+	["c.md", { tags: ["user-tag"], title: "C", xt_failure: { message: "old" } }],
+]);
 await clearXtStateFromVault({
 	app: {
 		fileManager: {
@@ -244,11 +372,13 @@ await clearXtStateFromVault({
 				if (cleanupFile.path === "b.md") {
 					throw new Error("locked");
 				}
-				mutate({ xt_ignore: true });
+				mutate(cleanupFrontmatter.get(cleanupFile.path) ?? {});
 			},
 		},
 		metadataCache: {
-			getFileCache: () => ({ frontmatter: { xt_ignore: true } }),
+			getFileCache: (cleanupFile: { path: string }) => ({
+				frontmatter: cleanupFrontmatter.get(cleanupFile.path),
+			}),
 		},
 		vault: { getMarkdownFiles: () => cleanupFiles },
 	},
@@ -257,4 +387,47 @@ assert.deepEqual(attempted, ["a.md", "b.md", "c.md"]);
 assert.equal(
 	globalThis.__notices.at(-1),
 	"Cleared XT metadata from 2 of 3 notes. Failed: b.md: locked",
+);
+assert.deepEqual(cleanupFrontmatter.get("a.md"), { title: "A" });
+assert.deepEqual(cleanupFrontmatter.get("b.md"), {
+	title: "B",
+	xt_ignore: true,
+});
+assert.deepEqual(cleanupFrontmatter.get("c.md"), {
+	tags: ["user-tag"],
+	title: "C",
+});
+
+globalThis.__notices = [];
+globalThis.__savedSettings = validSettings;
+globalThis.__pluginApp = {
+	metadataCache: { on: () => ({}) },
+	vault: { on: () => ({}) },
+	workspace: {
+		getActiveFile: () => null,
+		getLeavesOfType: () => {
+			throw new Error("workspace unavailable");
+		},
+		on: () => ({}),
+		onLayoutReady: () => {},
+	},
+};
+const commandPlugin = new PluginClass();
+await commandPlugin.onload();
+const openCommand = commandPlugin.commands.find(
+	(command) => command.id === "open-extaggerated",
+);
+assert.ok(openCommand);
+const unhandled: unknown[] = [];
+const captureUnhandled = (reason: unknown) => {
+	unhandled.push(reason);
+};
+process.on("unhandledRejection", captureUnhandled);
+openCommand.callback();
+await new Promise((resolve) => setImmediate(resolve));
+process.off("unhandledRejection", captureUnhandled);
+assert.deepEqual(unhandled, []);
+assert.equal(
+	globalThis.__notices.at(-1),
+	"Opening Extaggerated failed: workspace unavailable",
 );

@@ -30,14 +30,14 @@ export default class ExtaggeratedPlugin extends Plugin {
 		);
 
 		this.addRibbonIcon("tags", "Open Extaggerated", () => {
-			void this.activateView();
+			this.runCommand("Opening Extaggerated failed", this.activateView());
 		});
 
 		this.addCommand({
 			id: "open-extaggerated",
 			name: "Open Extaggerated",
 			callback: () => {
-				void this.activateView();
+				this.runCommand("Opening Extaggerated failed", this.activateView());
 			},
 		});
 
@@ -45,7 +45,10 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "sync-tags-active-note",
 			name: "Sync tags for active note",
 			callback: () => {
-				void syncActiveNoteTags(this);
+				this.runCommand(
+					"Syncing tags for the active note failed",
+					syncActiveNoteTags(this),
+				);
 			},
 		});
 

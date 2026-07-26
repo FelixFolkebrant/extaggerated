@@ -1,5 +1,5 @@
 import type { TFile } from "obsidian";
-import { Notice } from "obsidian";
+import { getFrontMatterInfo, Notice, parseYaml, stringifyYaml } from "obsidian";
 import { hasXtTags, isFileIgnored } from "./freshness";
 import type ExtaggeratedPlugin from "./main";
 import { estimateTokens, groupByTokenBudget } from "./tagBatching";
@@ -263,7 +263,13 @@ export async function syncNoteTagBatch(
 				}
 
 				try {
-					await writeTags(plugin, note.file, tags, note.contentHash);
+					await writeTags(
+						plugin,
+						note.file,
+						tags,
+						note.contentHash,
+						note.noteText,
+					);
 					onComplete({ file: note.file, result: { tagCount: tags.length } });
 				} catch (error) {
 					await completeFailure(plugin, note.file, toError(error), onComplete);
@@ -283,17 +289,40 @@ async function writeTags(
 	file: TFile,
 	tags: string[],
 	contentHash: string,
+	expectedBody: string,
 ): Promise<void> {
-	const currentHash = await hashNoteBody(await plugin.app.vault.read(file));
-	if (currentHash !== contentHash) {
-		throw new Error(`${file.basename} changed while XT was generating tags.`);
+	await plugin.app.vault.process(file, (markdown) => {
+		if (noteBodyForHash(markdown) !== expectedBody) {
+			throw new Error(`${file.basename} changed while XT was generating tags.`);
+		}
+
+		return updateFrontmatter(markdown, (frontmatter) => {
+			frontmatter.tags = tags;
+			frontmatter.xt_content_hash = contentHash;
+			delete frontmatter.xt_failure;
+		});
+	});
+}
+
+function updateFrontmatter(
+	markdown: string,
+	mutate: (frontmatter: Record<string, unknown>) => void,
+): string {
+	const info = getFrontMatterInfo(markdown);
+	const parsed = info.exists ? parseYaml(info.frontmatter) : {};
+	const frontmatter =
+		typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+			? parsed
+			: {};
+
+	mutate(frontmatter);
+	const yaml = stringifyYaml(frontmatter).trimEnd();
+
+	if (!info.exists) {
+		return `---\n${yaml}\n---\n${markdown}`;
 	}
 
-	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
-		frontmatter.tags = tags;
-		frontmatter.xt_content_hash = contentHash;
-		delete frontmatter.xt_failure;
-	});
+	return `${markdown.slice(0, info.from)}${yaml}\n${markdown.slice(info.to)}`;
 }
 
 async function completeFailure(
