@@ -162,16 +162,18 @@ export class ExtaggeratedPanelView extends ItemView {
 		}
 
 		this.changedFiles = changedFiles;
-		this.syncStatuses = Object.fromEntries(
-			changedFiles.flatMap((item) => {
-				const file = this.plugin.app.vault.getFileByPath(item.path);
-				const error =
-					item.status === "ignored" || !file
-						? null
-						: getXtFailure(this.plugin, file);
-				return error ? [[item.path, { error, type: "failed" }]] : [];
-			}),
-		);
+		const persistedFailures: Record<string, BatchSyncStatus> = {};
+		for (const item of changedFiles) {
+			const file = this.plugin.app.vault.getFileByPath(item.path);
+			const error =
+				item.status === "ignored" || !file
+					? null
+					: getXtFailure(this.plugin, file);
+			if (error) {
+				persistedFailures[item.path] = { error, type: "failed" };
+			}
+		}
+		this.syncStatuses = { ...this.syncStatuses, ...persistedFailures };
 		this.queueLoading = false;
 		this.selectedPaths = new Set(
 			[...this.selectedPaths].filter((path) =>
