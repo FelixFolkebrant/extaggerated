@@ -1,13 +1,17 @@
-import { TFolder } from "obsidian";
 import type { TFile } from "obsidian";
+import { TFolder } from "obsidian";
 import type ExtaggeratedPlugin from "./main";
 import { parseNodeDocument, renderNodeDocument } from "./nodeDocument";
 import { findNodeCandidates } from "./nodeRetrieval";
 import { requestOpenRouterJson } from "./openRouter";
 import { generateRetrievalTags } from "./tagging";
-import type { NodeDraft } from "./ui/NodeCreationModal";
 
-const NODE_DOCUMENT_PROMPT = `You create concise Obsidian megathreads. Return only JSON with an overview string and a sources array. Each source must have an id from the supplied candidates and a context string explaining why that note belongs in this node. Select at least one relevant candidate. Context must be plain text: do not write Markdown links, wikilinks, paths, headings, or IDs other than the source id field.`;
+const NODE_DOCUMENT_PROMPT = `You create concise Obsidian megathreads. Return only JSON with an overview string and a sources array. Each source must have an id from the supplied candidates and a context string explaining why that note belongs in this node. Select at least one relevant candidate. Overview and context must be plain text: do not write Markdown links, wikilinks, paths, headings, or IDs other than the source id field.`;
+
+export interface NodeDraft {
+	description: string;
+	name: string;
+}
 
 interface PreparedNodeCandidate {
 	content: string;
@@ -99,13 +103,11 @@ export async function generateNode(
 	await plugin.app.workspace.getLeaf(true).openFile(node);
 }
 
-function nodeName(value: string): string {
+export function nodeName(value: string): string {
 	const name = value.trim();
 	if (
-		name.length === 0 ||
-		name === "." ||
-		name === ".." ||
-		/[\\/:*?"<>|]/.test(name)
+		invalidPathSegment(name) ||
+		new TextEncoder().encode(`${name}.md`).length > 255
 	) {
 		throw new Error("Enter a node name that can be used as a file name.");
 	}
@@ -113,24 +115,30 @@ function nodeName(value: string): string {
 	return name;
 }
 
-function nodeFolder(value: string): string {
+export function nodeFolder(value: string): string {
 	const folder = value.trim().replace(/^\/+|\/+$/g, "");
 	if (
 		folder.length === 0 ||
-		folder
-			.split("/")
-			.some(
-				(segment) =>
-					segment.length === 0 ||
-					segment === "." ||
-					segment === ".." ||
-					segment.includes("\\"),
-			)
+		folder.split("/").some((segment) => invalidPathSegment(segment))
 	) {
 		throw new Error("Set a valid vault-relative nodes folder.");
 	}
 
 	return folder;
+}
+
+function invalidPathSegment(value: string): boolean {
+	const segment = value.trim();
+	return (
+		segment.length === 0 ||
+		new TextEncoder().encode(segment).length > 255 ||
+		segment !== value ||
+		segment === "." ||
+		segment === ".." ||
+		segment.endsWith(".") ||
+		/[\p{Cc}<>:"/\\|?*]/u.test(segment) ||
+		/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(segment)
+	);
 }
 
 function assertDestinationAvailable(

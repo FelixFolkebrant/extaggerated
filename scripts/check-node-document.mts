@@ -6,7 +6,10 @@ const document = parseNodeDocument(
 		overview: "A compact map of practical account security notes.",
 		sources: [
 			{ context: "Explains the tradeoffs of password managers.", id: "2" },
-			{ context: "Covers hardware-backed multi-factor authentication.", id: "1" },
+			{
+				context: "Covers hardware-backed multi-factor authentication.",
+				id: "1",
+			},
 		],
 	},
 	new Set(["1", "2"]),
@@ -39,11 +42,78 @@ Covers hardware-backed multi-factor authentication.
 assert.throws(
 	() =>
 		parseNodeDocument(
-			{ overview: "Overview", sources: [{ context: "Context", id: "missing" }] },
+			{
+				overview: "Overview",
+				sources: [{ context: "Context", id: "missing" }],
+			},
 			new Set(["1"]),
 		),
 	/invalid source/,
 );
+
+// These provider values previously crossed the boundary and could add
+// unverified references or restructure the generated note.
+const oldValidatorAccepted = [
+	"https://example.com/unrelated",
+	"Read more at www.example.com.",
+	"Read [the source][outside].",
+	"# A model-authored heading",
+	"<aside>Model-authored HTML</aside>",
+	"- A model-authored list",
+	"***",
+	"`model-authored code`",
+	"| Topic | Detail |\n| --- | --- |\n| A | B |",
+	"    model-authored code",
+	"A claim with a footnote[^1].",
+	"An inline footnote ^[model-authored detail].",
+	"A highlighted ==model-authored claim==.",
+	"A paragraph with a block marker ^model-id",
+	"Visible %%model-hidden comment%% text.",
+	"Use #security for this topic.",
+	"Contact <model@example.com>.",
+];
+
+for (const context of oldValidatorAccepted) {
+	assert.throws(
+		() =>
+			parseNodeDocument(
+				{ overview: "Overview", sources: [{ context, id: "1" }] },
+				new Set(["1"]),
+			),
+		/invalid source/,
+	);
+}
+
+assert.doesNotThrow(() =>
+	parseNodeDocument(
+		{
+			overview:
+				"Security notes: passwords, passkeys, recovery, and xt_content_hash ownership.",
+			sources: [
+				{
+					context:
+						"Compares 2 * 3 options; asks “what works?”, then answers plainly.",
+					id: "1",
+				},
+			],
+		},
+		new Set(["1"]),
+	),
+);
+for (const overview of [
+	"Read https://example.com/unrelated.",
+	"## Model-authored section",
+	"| Topic | Detail |\n| --- | --- |\n| A | B |",
+]) {
+	assert.throws(
+		() =>
+			parseNodeDocument(
+				{ overview, sources: [{ context: "Context", id: "1" }] },
+				new Set(["1"]),
+			),
+		/invalid node document/,
+	);
+}
 assert.throws(
 	() =>
 		parseNodeDocument(

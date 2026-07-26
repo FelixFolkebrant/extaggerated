@@ -1,6 +1,6 @@
-import type ExtaggeratedPlugin from "../main";
 import { Menu } from "obsidian";
-import { getActiveNoteFreshness, type FreshnessStatus } from "../freshness";
+import { type FreshnessStatus, getActiveNoteFreshness } from "../freshness";
+import type ExtaggeratedPlugin from "../main";
 import { ignoreActiveNote, syncActiveNoteTags } from "../noteSync";
 import { renderXtMark } from "./XtMark";
 
@@ -110,7 +110,7 @@ export function registerHeaderSyncIndicator(
 }
 
 function headerSyncIndicatorDisplay(
-	status: Exclude<FreshnessStatus, { type: "no-note" }>,
+	status: Exclude<FreshnessStatus, { type: "no-note" } | { type: "ignored" }>,
 ): {
 	className: string;
 	label: string;
@@ -134,12 +134,6 @@ function headerSyncIndicatorDisplay(
 				className: "text-(--text-muted)",
 				label: "XT never synced",
 				title: "Untagged",
-			};
-		case "ignored":
-			return {
-				className: "",
-				label: "XT ignored",
-				title: "XT ignores this note because xt_ignore is enabled.",
 			};
 		case "unavailable":
 			return {

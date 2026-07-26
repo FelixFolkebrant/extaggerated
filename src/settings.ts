@@ -1,4 +1,4 @@
-import { Notice, type App, PluginSettingTab, Setting } from "obsidian";
+import { type App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type ExtaggeratedPlugin from "./main";
 
 export interface ExtaggeratedSettings {
@@ -19,6 +19,32 @@ export const DEFAULT_SETTINGS: ExtaggeratedSettings = {
 
 export function isValidBatchTokenBudget(value: unknown): value is number {
 	return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+export function parseSettings(value: unknown): ExtaggeratedSettings {
+	const saved =
+		typeof value === "object" && value !== null
+			? (value as Record<string, unknown>)
+			: {};
+	const model = typeof saved.model === "string" ? saved.model.trim() : "";
+	const nodesFolder =
+		typeof saved.nodesFolder === "string" ? saved.nodesFolder.trim() : "";
+
+	return {
+		developerMode:
+			typeof saved.developerMode === "boolean"
+				? saved.developerMode
+				: DEFAULT_SETTINGS.developerMode,
+		maxBatchTokens: isValidBatchTokenBudget(saved.maxBatchTokens)
+			? saved.maxBatchTokens
+			: DEFAULT_SETTINGS.maxBatchTokens,
+		model: model || DEFAULT_SETTINGS.model,
+		nodesFolder: nodesFolder || DEFAULT_SETTINGS.nodesFolder,
+		openRouterApiKey:
+			typeof saved.openRouterApiKey === "string"
+				? saved.openRouterApiKey.trim()
+				: DEFAULT_SETTINGS.openRouterApiKey,
+	};
 }
 
 export class ExtaggeratedSettingTab extends PluginSettingTab {

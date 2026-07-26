@@ -1,24 +1,21 @@
-import { ItemView, Notice } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice } from "obsidian";
 import type { Root } from "react-dom/client";
-import type ExtaggeratedPlugin from "../main";
 import {
+	type ChangedFileQueueItem,
 	getChangedFileQueue,
 	getXtFailure,
-	isTaggableFile,
-	type ChangedFileQueueItem,
 } from "../freshness";
-import { syncNoteTagBatch } from "../noteSync";
+import type ExtaggeratedPlugin from "../main";
+import type { NodeDraft } from "../nodeGeneration";
 import { generateNode } from "../nodeGeneration";
-import type { BatchSyncStatus } from "./ChangedFileQueue";
-import { TagAllConfirmationModal } from "./TagAllConfirmationModal";
-import {
-	mountExtaggeratedView,
-	renderExtaggeratedView,
-	type ExtaggeratedViewState,
-} from "./mount";
-import { NodeCreationModal, type NodeDraft } from "./NodeCreationModal";
+import { syncNoteTagBatch } from "../noteSync";
+import { type BatchSyncStatus, canSyncFile } from "./ChangedFileQueue";
+import type { ExtaggeratedViewProps } from "./ExtaggeratedView";
+import { mountExtaggeratedView, renderExtaggeratedView } from "./mount";
+import { NodeCreationModal } from "./NodeCreationModal";
 import { SyncFailureModal } from "./SyncFailureModal";
+import { TagConfirmationModal } from "./TagConfirmationModal";
 
 export const XT_VIEW_TYPE = "extaggerated-view";
 
@@ -32,6 +29,7 @@ export class ExtaggeratedPanelView extends ItemView {
 	private sortAscending = true;
 	private syncStatuses: Record<string, BatchSyncStatus> = {};
 	private taggingPaths = new Set<string>();
+	private syncInFlight = false;
 	private nodeCreating = false;
 
 	constructor(
@@ -77,7 +75,7 @@ export class ExtaggeratedPanelView extends ItemView {
 		renderExtaggeratedView(this.root, this.viewState());
 	}
 
-	private viewState(): ExtaggeratedViewState {
+	private viewState(): ExtaggeratedViewProps {
 		return {
 			changedFiles: this.changedFiles,
 			developerMode: this.plugin.settings.developerMode,
@@ -109,7 +107,7 @@ export class ExtaggeratedPanelView extends ItemView {
 				this.render();
 			},
 			onSyncAll: () => {
-				void this.confirmAndSyncAll();
+				void this.syncQueuedFiles(this.syncableQueuePaths());
 			},
 			onSyncSelected: () => {
 				void this.syncQueuedFiles(
@@ -210,32 +208,11 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private isSyncableFile(file: ChangedFileQueueItem): boolean {
-		return (
-			file.status !== "ignored" &&
-			(isTaggableFile(file) || this.syncStatuses[file.path]?.type === "failed")
-		);
-	}
-
-	private async confirmAndSyncAll(): Promise<void> {
-		const paths = this.syncableQueuePaths();
-
-		if (paths.length === 0) {
-			new Notice("No changed or untagged notes are available to tag.");
-			return;
-		}
-
-		const confirmed = await new TagAllConfirmationModal(
-			this.app,
-			paths.length,
-		).openAndWait();
-
-		if (confirmed) {
-			await this.syncQueuedFiles(paths);
-		}
+		return canSyncFile(file, this.syncStatuses[file.path]);
 	}
 
 	private async syncQueuedFiles(paths: string[]): Promise<void> {
-		if (this.taggingPaths.size > 0) {
+		if (this.syncInFlight) {
 			return;
 		}
 
@@ -249,61 +226,72 @@ export class ExtaggeratedPanelView extends ItemView {
 			return;
 		}
 
-		this.taggingPaths = new Set(paths);
-		this.render();
-
+		this.syncInFlight = true;
 		try {
-			const files = paths.flatMap((path) => {
-				const file = this.plugin.app.vault.getFileByPath(path);
+			const confirmed = await new TagConfirmationModal(
+				this.app,
+				paths.length,
+			).openAndWait();
+			if (!confirmed) {
+				return;
+			}
 
-				if (!file) {
-					new Notice(`XT could not tag ${path}: file no longer exists.`, 8_000);
-					this.syncStatuses = {
-						...this.syncStatuses,
-						[path]: {
+			this.taggingPaths = new Set(paths);
+			try {
+				const nextSyncStatuses: Record<string, BatchSyncStatus> = {
+					...this.syncStatuses,
+				};
+				const files = paths.flatMap((path) => {
+					const file = this.plugin.app.vault.getFileByPath(path);
+
+					if (!file) {
+						new Notice(
+							`XT could not tag ${path}: file no longer exists.`,
+							8_000,
+						);
+						nextSyncStatuses[path] = {
 							error: new Error("File no longer exists."),
 							type: "failed",
-						},
-					};
+						};
+						return [];
+					}
+
+					nextSyncStatuses[path] = { type: "syncing" };
+					return [file];
+				});
+				this.syncStatuses = nextSyncStatuses;
+				this.render();
+
+				await syncNoteTagBatch(this.plugin, files, (outcome) => {
+					if (outcome.result) {
+						this.syncStatuses = {
+							...this.syncStatuses,
+							[outcome.file.path]: {
+								message: `${outcome.result.tagCount} tags`,
+								type: "synced",
+							},
+						};
+					} else {
+						const error = outcome.error ?? new Error("XT tag sync failed.");
+						new Notice(
+							`XT could not tag ${outcome.file.basename}: ${error.message}`,
+							8_000,
+						);
+						this.syncStatuses = {
+							...this.syncStatuses,
+							[outcome.file.path]: { error, type: "failed" },
+						};
+					}
 					this.render();
-					return [];
-				}
+				});
 
-				this.syncStatuses = {
-					...this.syncStatuses,
-					[path]: { type: "syncing" },
-				};
+				await this.refreshQueue();
+			} finally {
+				this.taggingPaths.clear();
 				this.render();
-				return [file];
-			});
-
-			await syncNoteTagBatch(this.plugin, files, (outcome) => {
-				if (outcome.result) {
-					this.syncStatuses = {
-						...this.syncStatuses,
-						[outcome.file.path]: {
-							message: `${outcome.result.tagCount} tags`,
-							type: "synced",
-						},
-					};
-				} else {
-					const error = outcome.error ?? new Error("XT tag sync failed.");
-					new Notice(
-						`XT could not tag ${outcome.file.basename}: ${error.message}`,
-						8_000,
-					);
-					this.syncStatuses = {
-						...this.syncStatuses,
-						[outcome.file.path]: { error, type: "failed" },
-					};
-				}
-				this.render();
-			});
-
-			await this.refreshQueue();
+			}
 		} finally {
-			this.taggingPaths.clear();
-			this.render();
+			this.syncInFlight = false;
 		}
 	}
 }

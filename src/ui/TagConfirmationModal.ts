@@ -1,6 +1,6 @@
 import { Modal, Setting } from "obsidian";
 
-export class TagAllConfirmationModal extends Modal {
+export class TagConfirmationModal extends Modal {
 	private resolve: ((confirmed: boolean) => void) | null = null;
 	private settled = false;
 
@@ -23,7 +23,7 @@ export class TagAllConfirmationModal extends Modal {
 		this.contentEl.empty();
 		this.contentEl.addClass("py-6");
 
-		this.contentEl.createEl("h2", { text: "Tag all files?" });
+		this.contentEl.createEl("h2", { text: "Tag files?" });
 		this.contentEl.createEl("p", {
 			cls: "mt-6 text-6xl font-semibold text-(--interactive-accent)",
 			text: String(this.fileCount),

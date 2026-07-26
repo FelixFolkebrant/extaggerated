@@ -5,7 +5,7 @@ import { XtMark } from "./XtMark";
 
 type PanelMode = "tagging" | "nodes";
 
-interface ExtaggeratedViewProps {
+export interface ExtaggeratedViewProps {
 	changedFiles: ChangedFileQueueItem[];
 	developerMode: boolean;
 	hasApiKey: boolean;
@@ -147,24 +147,33 @@ function FileStatusBar({
 			label: "XT ignored",
 			type: "ignored",
 		},
+		{
+			className: "bg-(--color-red)",
+			label: "Unavailable",
+			type: "unavailable",
+		},
 	] as const;
+	const statusCounts = statuses.map((status) => ({
+		...status,
+		count: changedFiles.filter((file) => file.status === status.type).length,
+	}));
+	const distributionLabel = statusCounts
+		.map((status) => `${status.label}: ${status.count}`)
+		.join(", ");
 
 	return (
 		<div
-			aria-label="File status distribution"
+			aria-label={`File status distribution. ${distributionLabel}`}
 			className="flex h-2 overflow-hidden rounded-full bg-(--background-primary-alt)"
+			role="img"
 		>
-			{statuses.map((status) => {
-				const count = changedFiles.filter(
-					(file) => file.status === status.type,
-				).length;
-
-				return count > 0 ? (
+			{statusCounts.map((status) => {
+				return status.count > 0 ? (
 					<span
 						className={status.className}
 						key={status.type}
-						style={{ flexGrow: count }}
-						title={`${status.label}: ${count}`}
+						style={{ flexGrow: status.count }}
+						title={`${status.label}: ${status.count}`}
 					/>
 				) : null;
 			})}

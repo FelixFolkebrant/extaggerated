@@ -1,9 +1,5 @@
 import { Modal } from "obsidian";
-
-export interface NodeDraft {
-	description: string;
-	name: string;
-}
+import type { NodeDraft } from "../nodeGeneration";
 
 export class NodeCreationModal extends Modal {
 	private description = "";

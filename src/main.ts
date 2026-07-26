@@ -9,14 +9,13 @@ import {
 	DEFAULT_SETTINGS,
 	type ExtaggeratedSettings,
 	ExtaggeratedSettingTab,
-	isValidBatchTokenBudget,
+	parseSettings,
 } from "./settings";
 import {
 	ExtaggeratedPanelView,
 	XT_VIEW_TYPE,
 } from "./ui/ExtaggeratedPanelView";
 import { registerHeaderSyncIndicator } from "./ui/headerSyncIndicator";
-import { OverwriteWarningModal } from "./ui/OverwriteWarningModal";
 
 export default class ExtaggeratedPlugin extends Plugin {
 	settings: ExtaggeratedSettings = DEFAULT_SETTINGS;
@@ -31,14 +30,14 @@ export default class ExtaggeratedPlugin extends Plugin {
 		);
 
 		this.addRibbonIcon("tags", "Open Extaggerated", () => {
-			void this.activateView();
+			this.runCommand("Opening Extaggerated failed", this.activateView());
 		});
 
 		this.addCommand({
 			id: "open-extaggerated",
 			name: "Open Extaggerated",
 			callback: () => {
-				void this.activateView();
+				this.runCommand("Opening Extaggerated failed", this.activateView());
 			},
 		});
 
@@ -46,7 +45,10 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "sync-tags-active-note",
 			name: "Sync tags for active note",
 			callback: () => {
-				void syncActiveNoteTags(this);
+				this.runCommand(
+					"Syncing tags for the active note failed",
+					syncActiveNoteTags(this),
+				);
 			},
 		});
 
@@ -54,7 +56,7 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "ignore-active-note",
 			name: "Ignore active note",
 			callback: () => {
-				void this.ignoreActiveNote();
+				this.runCommand("Ignore active note failed", this.ignoreActiveNote());
 			},
 		});
 
@@ -62,7 +64,10 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "debug-clear-xt-state-active-note",
 			name: "Debug: Clear XT metadata from active note",
 			callback: () => {
-				void this.clearXtStateFromActiveNote();
+				this.runCommand(
+					"Clearing XT metadata from the active note failed",
+					this.clearXtStateFromActiveNote(),
+				);
 			},
 		});
 
@@ -70,7 +75,10 @@ export default class ExtaggeratedPlugin extends Plugin {
 			id: "debug-clear-xt-state-vault",
 			name: "Debug: Clear XT metadata from all notes",
 			callback: () => {
-				void clearXtStateFromVault(this);
+				this.runCommand(
+					"Clearing XT metadata from the vault failed",
+					clearXtStateFromVault(this),
+				);
 			},
 		});
 
@@ -80,15 +88,7 @@ export default class ExtaggeratedPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const loadedSettings =
-			(await this.loadData()) as Partial<ExtaggeratedSettings> | null;
-		this.settings = {
-			...DEFAULT_SETTINGS,
-			...loadedSettings,
-			maxBatchTokens: isValidBatchTokenBudget(loadedSettings?.maxBatchTokens)
-				? loadedSettings.maxBatchTokens
-				: DEFAULT_SETTINGS.maxBatchTokens,
-		};
+		this.settings = parseSettings(await this.loadData());
 	}
 
 	async saveSettings(): Promise<void> {
@@ -104,6 +104,14 @@ export default class ExtaggeratedPlugin extends Plugin {
 
 		settings.open();
 		settings.openTabById(this.manifest.id);
+	}
+
+	private runCommand(failureMessage: string, command: Promise<void>): void {
+		void command.catch((error) => {
+			new Notice(
+				`${failureMessage}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		});
 	}
 
 	private async activateView(): Promise<void> {
@@ -126,26 +134,10 @@ export default class ExtaggeratedPlugin extends Plugin {
 		this.app.workspace.revealLeaf(leaf);
 	}
 
-	async initializeTagging(): Promise<void> {
-		if (this.settings.openRouterApiKey.length === 0) {
-			new Notice("Add an OpenRouter API key before initializing XT tagging.");
-			return;
-		}
-
-		const confirmed = await new OverwriteWarningModal(this.app).openAndWait();
-
-		if (!confirmed) {
-			return;
-		}
-
-		new Notice(
-			"XT tagging initialization confirmed. Changed-note queue comes next.",
-		);
-	}
-
 	private async ignoreActiveNote(): Promise<void> {
-		await ignoreActiveNote(this);
-		await this.refreshHeaderSyncIndicator?.();
+		if (await ignoreActiveNote(this)) {
+			await this.refreshHeaderSyncIndicator?.();
+		}
 	}
 
 	private async clearXtStateFromActiveNote(): Promise<void> {

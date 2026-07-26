@@ -1,32 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { ChangedFileQueueItem } from "../freshness";
-import type { BatchSyncStatus } from "./ChangedFileQueue";
-import { ExtaggeratedView } from "./ExtaggeratedView";
+import {
+	ExtaggeratedView,
+	type ExtaggeratedViewProps,
+} from "./ExtaggeratedView";
 
-export interface ExtaggeratedViewState {
-	changedFiles: ChangedFileQueueItem[];
-	developerMode: boolean;
-	hasApiKey: boolean;
-	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
-	onOpenFile: (file: ChangedFileQueueItem) => void;
-	onOpenNodeCreation: () => void;
-	onOpenSettings: () => void;
-	onRefreshQueue: () => void;
-	onSearchChange: (query: string) => void;
-	onSyncAll: () => void;
-	onSyncSelected: () => void;
-	onToggleQueuedFile: (path: string) => void;
-	onToggleSortDirection: () => void;
-	queueLoading: boolean;
-	searchQuery: string;
-	selectedPaths: string[];
-	sortAscending: boolean;
-	syncStatuses: Record<string, BatchSyncStatus>;
-	taggingPaths: string[];
-}
-
-interface MountExtaggeratedViewOptions extends ExtaggeratedViewState {
+interface MountExtaggeratedViewOptions extends ExtaggeratedViewProps {
 	container: HTMLElement;
 }
 
@@ -41,7 +20,7 @@ export function mountExtaggeratedView({
 
 export function renderExtaggeratedView(
 	root: Root,
-	state: ExtaggeratedViewState,
+	state: ExtaggeratedViewProps,
 ): void {
 	root.render(
 		<StrictMode>

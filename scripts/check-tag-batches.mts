@@ -4,7 +4,10 @@ import { estimateTokens, groupByTokenBudget } from "../src/tagBatching.ts";
 const notes = [
 	{ estimatedTokens: estimateTokens("one two three"), path: "fits-a.md" },
 	{ estimatedTokens: estimateTokens("one two three four"), path: "fits-b.md" },
-	{ estimatedTokens: estimateTokens("one two three four five six seven eight"), path: "oversized.md" },
+	{
+		estimatedTokens: estimateTokens("one two three four five six seven eight"),
+		path: "oversized.md",
+	},
 	{ estimatedTokens: estimateTokens("one"), path: "after-oversized.md" },
 ];
 

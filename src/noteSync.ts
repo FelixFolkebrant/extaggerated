@@ -1,8 +1,8 @@
 import type { TFile } from "obsidian";
-import { Notice } from "obsidian";
+import { getFrontMatterInfo, Notice, parseYaml, stringifyYaml } from "obsidian";
 import { hasXtTags, isFileIgnored } from "./freshness";
 import type ExtaggeratedPlugin from "./main";
-import { groupByTokenBudget, estimateTokens } from "./tagBatching";
+import { estimateTokens, groupByTokenBudget } from "./tagBatching";
 import { generateTagsForNotes, hashNoteBody, noteBodyForHash } from "./tagging";
 
 export interface SyncNoteTagsResult {
@@ -21,6 +21,8 @@ interface PreparedNote {
 	noteText: string;
 	estimatedTokens: number;
 }
+
+class UnsupportedFrontmatterError extends Error {}
 
 export async function syncActiveNoteTags(
 	plugin: ExtaggeratedPlugin,
@@ -61,17 +63,17 @@ export async function syncActiveNoteTags(
 
 export async function ignoreActiveNote(
 	plugin: ExtaggeratedPlugin,
-): Promise<void> {
+): Promise<boolean> {
 	const file = plugin.app.workspace.getActiveFile();
 
 	if (file?.extension !== "md") {
 		new Notice("Open a markdown note before ignoring it.");
-		return;
+		return false;
 	}
 
 	if (isFileIgnored(plugin, file)) {
 		new Notice(`${file.basename} is already ignored by XT.`);
-		return;
+		return false;
 	}
 
 	const removesXtTags = hasXtTags(plugin, file);
@@ -81,19 +83,25 @@ export async function ignoreActiveNote(
 			`XT will remove the tags it created in ${file.basename} and its sync metadata, then set xt_ignore: true. Continue?`,
 		)
 	) {
-		return;
+		return false;
 	}
 
-	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
-		if (removesXtTags) {
-			delete frontmatter.tags;
-			delete frontmatter.xt_content_hash;
-		}
-		delete frontmatter.xt_failure;
-		frontmatter.xt_ignore = true;
-	});
+	try {
+		await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			if (removesXtTags) {
+				delete frontmatter.tags;
+				delete frontmatter.xt_content_hash;
+			}
+			delete frontmatter.xt_failure;
+			frontmatter.xt_ignore = true;
+		});
+	} catch (error) {
+		new Notice(`Could not ignore ${file.path}: ${toError(error).message}`);
+		return false;
+	}
 
 	new Notice(`XT now ignores ${file.basename}.`);
+	return true;
 }
 
 export async function clearXtStateFromActiveNote(
@@ -119,7 +127,15 @@ export async function clearXtStateFromActiveNote(
 		return false;
 	}
 
-	await clearXtState(plugin, file);
+	try {
+		await clearXtState(plugin, file);
+	} catch (error) {
+		new Notice(
+			`Could not clear XT metadata from ${file.path}: ${toError(error).message}`,
+		);
+		return false;
+	}
+
 	new Notice(`Cleared XT metadata from ${file.basename}.`);
 	return true;
 }
@@ -144,8 +160,21 @@ export async function clearXtStateFromVault(
 		return;
 	}
 
+	const failures: string[] = [];
 	for (const file of files) {
-		await clearXtState(plugin, file);
+		try {
+			await clearXtState(plugin, file);
+		} catch (error) {
+			failures.push(`${file.path}: ${toError(error).message}`);
+		}
+	}
+
+	const cleared = files.length - failures.length;
+	if (failures.length > 0) {
+		new Notice(
+			`Cleared XT metadata from ${cleared} of ${files.length} notes. Failed: ${failures.join("; ")}`,
+		);
+		return;
 	}
 
 	new Notice(
@@ -236,10 +265,21 @@ export async function syncNoteTagBatch(
 				}
 
 				try {
-					await writeTags(plugin, note.file, tags, note.contentHash);
+					await writeTags(
+						plugin,
+						note.file,
+						tags,
+						note.contentHash,
+						note.noteText,
+					);
 					onComplete({ file: note.file, result: { tagCount: tags.length } });
 				} catch (error) {
-					await completeFailure(plugin, note.file, toError(error), onComplete);
+					const failure = toError(error);
+					if (failure instanceof UnsupportedFrontmatterError) {
+						onComplete({ error: failure, file: note.file });
+					} else {
+						await completeFailure(plugin, note.file, failure, onComplete);
+					}
 				}
 			}
 		} catch (error) {
@@ -256,12 +296,50 @@ async function writeTags(
 	file: TFile,
 	tags: string[],
 	contentHash: string,
+	expectedBody: string,
 ): Promise<void> {
-	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
-		frontmatter.tags = tags;
-		frontmatter.xt_content_hash = contentHash;
-		delete frontmatter.xt_failure;
+	await plugin.app.vault.process(file, (markdown) => {
+		if (noteBodyForHash(markdown) !== expectedBody) {
+			throw new Error(`${file.basename} changed while XT was generating tags.`);
+		}
+
+		return updateFrontmatter(markdown, (frontmatter) => {
+			frontmatter.tags = tags;
+			frontmatter.xt_content_hash = contentHash;
+			delete frontmatter.xt_failure;
+		});
 	});
+}
+
+function updateFrontmatter(
+	markdown: string,
+	mutate: (frontmatter: Record<string, unknown>) => void,
+): string {
+	const info = getFrontMatterInfo(markdown);
+	let frontmatter: Record<string, unknown> = {};
+
+	if (info.exists && info.frontmatter.trim().length > 0) {
+		const parsed = parseYaml(info.frontmatter);
+		if (
+			typeof parsed !== "object" ||
+			parsed === null ||
+			Array.isArray(parsed)
+		) {
+			throw new UnsupportedFrontmatterError(
+				"XT cannot tag a note with non-mapping frontmatter.",
+			);
+		}
+		frontmatter = parsed;
+	}
+
+	mutate(frontmatter);
+	const yaml = stringifyYaml(frontmatter).trimEnd();
+
+	if (!info.exists) {
+		return `---\n${yaml}\n---\n${markdown}`;
+	}
+
+	return `${markdown.slice(0, info.from)}${yaml}\n${markdown.slice(info.to)}`;
 }
 
 async function completeFailure(

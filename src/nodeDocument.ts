@@ -24,7 +24,7 @@ export function parseNodeDocument(
 		!("sources" in value) ||
 		typeof value.overview !== "string" ||
 		value.overview.trim().length === 0 ||
-		containsModelLink(value.overview) ||
+		containsModelStructure(value.overview) ||
 		!Array.isArray(value.sources)
 	) {
 		throw new Error("OpenRouter returned an invalid node document.");
@@ -44,7 +44,7 @@ export function parseNodeDocument(
 			typeof source.id !== "string" ||
 			typeof source.context !== "string" ||
 			source.context.trim().length === 0 ||
-			containsModelLink(source.context) ||
+			containsModelStructure(source.context) ||
 			!candidateIds.has(source.id) ||
 			usedIds.has(source.id)
 		) {
@@ -60,8 +60,25 @@ export function parseNodeDocument(
 	return { overview: value.overview.trim(), sources };
 }
 
-function containsModelLink(value: string): boolean {
-	return /\[\[|\]\(/.test(value);
+function containsModelStructure(value: string): boolean {
+	return (
+		/\b[a-z][a-z\d+.-]*:\/\/|\bmailto:|\bwww\./iu.test(value) ||
+		/!?\[[^\]\n]*\]\([^)\n]*\)|!?\[[^\]\n]+\]\s*\[[^\]\n]*\]|!?\[\[[^\]\n]+\]\]/u.test(
+			value,
+		) ||
+		/(?:^|\n)(?: {4}|\t)|(?:^|\n) {0,3}(?:#{1,6}(?:\s|$)|>|(?:[-+*]|\d+[.)])\s|(?:\*{3,}|_{3,})\s*(?:\n|$)|`{3}|~{3}|\[[^\]\n]+\]:\s*\S|\[\^[^\]\n]+\]:)/u.test(
+			value,
+		) ||
+		/(?:^|\n) {0,3}(?:=+|-+)\s*(?:\n|$)/u.test(value) ||
+		/(?:^|\n)\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}/u.test(value) ||
+		/<(?:!--|\/?[a-z][a-z\d-]*(?:\s[^<>]*)?\/?|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/iu.test(
+			value,
+		) ||
+		/(?:^|[^\p{L}\p{N}])#[\p{L}\p{N}_-]+/u.test(value) ||
+		/\[\^[^\]\n]+\]|\^\[[^\]\n]+\]|(?:^|\s)\^[\p{L}\p{N}-]+(?=\s*(?:\n|$))|%%[\s\S]*?%%|`|(?:^|[^\p{L}\p{N}])(\*{1,3}|_{1,3})(?=\S)[^\n]*?\S\1(?![\p{L}\p{N}])|~~(?=\S)[^\n]*?\S~~|==(?=\S)[^\n]*?\S==/u.test(
+			value,
+		)
+	);
 }
 
 export function renderNodeDocument(

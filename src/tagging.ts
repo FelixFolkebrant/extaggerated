@@ -29,9 +29,10 @@ export function normalizeTags(tags: string[]): string[] {
 		const value = tag
 			.trim()
 			.toLowerCase()
+			.normalize("NFC")
 			.replace(/^#/, "")
 			.replace(/['"]/g, "")
-			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
 			.replace(/^-+|-+$/g, "");
 
 		if (value.length === 0 || seen.has(value)) {
@@ -103,6 +104,7 @@ export async function generateTagsForNotes({
 			!("tags" in result) ||
 			typeof result.id !== "string" ||
 			!Array.isArray(result.tags) ||
+			!result.tags.every((tag: unknown) => typeof tag === "string") ||
 			!requestedIds.has(result.id) ||
 			tagsById.has(result.id)
 		) {
@@ -111,14 +113,7 @@ export async function generateTagsForNotes({
 			);
 		}
 
-		tagsById.set(
-			result.id,
-			normalizeTags(
-				result.tags.filter(
-					(tag: unknown): tag is string => typeof tag === "string",
-				),
-			),
-		);
+		tagsById.set(result.id, normalizeTags(result.tags));
 	}
 
 	if (tagsById.size !== requestedIds.size) {
