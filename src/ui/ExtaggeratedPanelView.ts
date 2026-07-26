@@ -87,6 +87,14 @@ export class ExtaggeratedPanelView extends ItemView {
 					new SyncFailureModal(this.app, file.path, error).open();
 				}
 			},
+			onOpenFile: (file) => {
+				const vaultFile = this.app.vault.getFileByPath(file.path);
+				if (!vaultFile) {
+					new Notice(`XT could not open ${file.path}: file no longer exists.`);
+					return;
+				}
+				void this.app.workspace.getLeaf(true).openFile(vaultFile);
+			},
 			onOpenNodeCreation: () => {
 				this.openNodeCreation();
 			},

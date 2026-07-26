@@ -10,6 +10,7 @@ interface ChangedFileQueueProps {
 	developerMode: boolean;
 	hasApiKey: boolean;
 	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
+	onOpenFile: (file: ChangedFileQueueItem) => void;
 	onSearchChange: (query: string) => void;
 	onSyncAll: () => void;
 	onSyncSelected: () => void;
@@ -28,6 +29,7 @@ export function ChangedFileQueue({
 	developerMode,
 	hasApiKey,
 	onOpenFailure,
+	onOpenFile,
 	onSearchChange,
 	onSyncAll,
 	onSyncSelected,
@@ -142,6 +144,7 @@ export function ChangedFileQueue({
 									file={file}
 									key={file.path}
 									onOpenFailure={onOpenFailure}
+									onOpenFile={onOpenFile}
 									onToggleQueuedFile={onToggleQueuedFile}
 									selected={selected.has(file.path)}
 									syncStatus={syncStatuses[file.path]}
@@ -166,6 +169,7 @@ export function ChangedFileQueue({
 									file={file}
 									key={file.path}
 									onOpenFailure={onOpenFailure}
+									onOpenFile={onOpenFile}
 									onToggleQueuedFile={onToggleQueuedFile}
 									selected={selected.has(file.path)}
 									syncStatus={syncStatuses[file.path]}
@@ -184,6 +188,7 @@ export function ChangedFileQueue({
 								file={file}
 								key={file.path}
 								onOpenFailure={onOpenFailure}
+								onOpenFile={onOpenFile}
 								onToggleQueuedFile={onToggleQueuedFile}
 								selected={selected.has(file.path)}
 								syncStatus={syncStatuses[file.path]}
@@ -200,6 +205,7 @@ interface ChangedFileQueueRowProps {
 	developerMode: boolean;
 	file: ChangedFileQueueItem;
 	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
+	onOpenFile: (file: ChangedFileQueueItem) => void;
 	onToggleQueuedFile: (path: string) => void;
 	selected: boolean;
 	syncStatus?: BatchSyncStatus;
@@ -210,6 +216,7 @@ function ChangedFileQueueRow({
 	developerMode,
 	file,
 	onOpenFailure,
+	onOpenFile,
 	onToggleQueuedFile,
 	selected,
 	syncStatus,
@@ -228,7 +235,14 @@ function ChangedFileQueueRow({
 						className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-(--interactive-accent) border-r-transparent"
 						role="status"
 					/>
-					<span className="min-w-0 flex-1 truncate animate-pulse text-(--interactive-accent)">
+					<span
+						className="min-w-0 flex-1 truncate animate-pulse text-(--interactive-accent)"
+						onClick={(event) => {
+							if (event.ctrlKey || event.metaKey) {
+								onOpenFile(file);
+							}
+						}}
+					>
 						{file.fileName}
 					</span>
 				</div>
@@ -252,6 +266,12 @@ function ChangedFileQueueRow({
 					/>
 					<span
 						className={`min-w-0 flex-1 truncate ${status.className} ${selectionClassName}`}
+						onClick={(event) => {
+							if (event.ctrlKey || event.metaKey) {
+								event.preventDefault();
+								onOpenFile(file);
+							}
+						}}
 					>
 						{file.fileName}
 					</span>
