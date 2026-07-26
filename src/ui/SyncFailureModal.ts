@@ -15,13 +15,13 @@ export class SyncFailureModal extends Modal {
 		this.contentEl.createEl("h2", { text: "Tag sync failure" });
 		const details = this.contentEl.createEl("textarea", {
 			attr: { readonly: "true", rows: "12" },
-			cls: "w-full",
+			cls: "w-full rounded bg-black p-3 font-(family-name:--font-monospace) text-sm text-(--text-muted)",
 		});
 		details.value = report;
 
 		const copyButton = this.contentEl.createEl("button", {
 			cls: "mod-cta mt-3",
-			text: "Copy report",
+			text: "Copy",
 		});
 		copyButton.addEventListener("click", async () => {
 			try {
