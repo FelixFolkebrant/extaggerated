@@ -7,17 +7,15 @@ import {
 	getXtFailure,
 } from "../freshness";
 import type ExtaggeratedPlugin from "../main";
+import type { NodeDraft } from "../nodeGeneration";
 import { generateNode } from "../nodeGeneration";
 import { syncNoteTagBatch } from "../noteSync";
 import { type BatchSyncStatus, canSyncFile } from "./ChangedFileQueue";
-import {
-	type ExtaggeratedViewState,
-	mountExtaggeratedView,
-	renderExtaggeratedView,
-} from "./mount";
-import { NodeCreationModal, type NodeDraft } from "./NodeCreationModal";
+import type { ExtaggeratedViewProps } from "./ExtaggeratedView";
+import { mountExtaggeratedView, renderExtaggeratedView } from "./mount";
+import { NodeCreationModal } from "./NodeCreationModal";
 import { SyncFailureModal } from "./SyncFailureModal";
-import { TagAllConfirmationModal } from "./TagAllConfirmationModal";
+import { TagConfirmationModal } from "./TagConfirmationModal";
 
 export const XT_VIEW_TYPE = "extaggerated-view";
 
@@ -76,7 +74,7 @@ export class ExtaggeratedPanelView extends ItemView {
 		renderExtaggeratedView(this.root, this.viewState());
 	}
 
-	private viewState(): ExtaggeratedViewState {
+	private viewState(): ExtaggeratedViewProps {
 		return {
 			changedFiles: this.changedFiles,
 			developerMode: this.plugin.settings.developerMode,
@@ -108,7 +106,7 @@ export class ExtaggeratedPanelView extends ItemView {
 				this.render();
 			},
 			onSyncAll: () => {
-				void this.confirmAndSyncAll();
+				void this.syncQueuedFiles(this.syncableQueuePaths());
 			},
 			onSyncSelected: () => {
 				void this.syncQueuedFiles(
@@ -212,24 +210,6 @@ export class ExtaggeratedPanelView extends ItemView {
 		return canSyncFile(file, this.syncStatuses[file.path]);
 	}
 
-	private async confirmAndSyncAll(): Promise<void> {
-		const paths = this.syncableQueuePaths();
-
-		if (paths.length === 0) {
-			new Notice("No changed or untagged notes are available to tag.");
-			return;
-		}
-
-		const confirmed = await new TagAllConfirmationModal(
-			this.app,
-			paths.length,
-		).openAndWait();
-
-		if (confirmed) {
-			await this.syncQueuedFiles(paths);
-		}
-	}
-
 	private async syncQueuedFiles(paths: string[]): Promise<void> {
 		if (this.taggingPaths.size > 0) {
 			return;
@@ -242,6 +222,14 @@ export class ExtaggeratedPanelView extends ItemView {
 
 		if (this.plugin.settings.openRouterApiKey.length === 0) {
 			new Notice("Add an OpenRouter API key before syncing XT tags.");
+			return;
+		}
+
+		const confirmed = await new TagConfirmationModal(
+			this.app,
+			paths.length,
+		).openAndWait();
+		if (!confirmed) {
 			return;
 		}
 

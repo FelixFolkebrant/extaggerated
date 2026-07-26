@@ -153,13 +153,12 @@ function FileStatusBar({
 			type: "unavailable",
 		},
 	] as const;
-	const distributionLabel = statuses
-		.map((status) => {
-			const count = changedFiles.filter(
-				(file) => file.status === status.type,
-			).length;
-			return `${status.label}: ${count}`;
-		})
+	const statusCounts = statuses.map((status) => ({
+		...status,
+		count: changedFiles.filter((file) => file.status === status.type).length,
+	}));
+	const distributionLabel = statusCounts
+		.map((status) => `${status.label}: ${status.count}`)
 		.join(", ");
 
 	return (
@@ -168,17 +167,13 @@ function FileStatusBar({
 			className="flex h-2 overflow-hidden rounded-full bg-(--background-primary-alt)"
 			role="img"
 		>
-			{statuses.map((status) => {
-				const count = changedFiles.filter(
-					(file) => file.status === status.type,
-				).length;
-
-				return count > 0 ? (
+			{statusCounts.map((status) => {
+				return status.count > 0 ? (
 					<span
 						className={status.className}
 						key={status.type}
-						style={{ flexGrow: count }}
-						title={`${status.label}: ${count}`}
+						style={{ flexGrow: status.count }}
+						title={`${status.label}: ${status.count}`}
 					/>
 				) : null;
 			})}
