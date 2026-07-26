@@ -65,6 +65,10 @@ const oldValidatorAccepted = [
 	"| Topic | Detail |\n| --- | --- |\n| A | B |",
 	"    model-authored code",
 	"A claim with a footnote[^1].",
+	"An inline footnote ^[model-authored detail].",
+	"A highlighted ==model-authored claim==.",
+	"A paragraph with a block marker ^model-id",
+	"Visible %%model-hidden comment%% text.",
 	"Use #security for this topic.",
 	"Contact <model@example.com>.",
 ];
