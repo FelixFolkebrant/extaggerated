@@ -17,6 +17,7 @@ import {
 	type ExtaggeratedViewState,
 } from "./mount";
 import { NodeCreationModal, type NodeDraft } from "./NodeCreationModal";
+import { SyncFailureModal } from "./SyncFailureModal";
 
 export const XT_VIEW_TYPE = "extaggerated-view";
 
@@ -78,7 +79,13 @@ export class ExtaggeratedPanelView extends ItemView {
 	private viewState(): ExtaggeratedViewState {
 		return {
 			changedFiles: this.changedFiles,
+			developerMode: this.plugin.settings.developerMode,
 			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
+			onOpenFailure: (file, error) => {
+				if (this.plugin.settings.developerMode) {
+					new SyncFailureModal(this.app, file.path, error).open();
+				}
+			},
 			onOpenNodeCreation: () => {
 				this.openNodeCreation();
 			},
@@ -223,7 +230,10 @@ export class ExtaggeratedPanelView extends ItemView {
 					new Notice(`XT could not tag ${path}: file no longer exists.`, 8_000);
 					this.syncStatuses = {
 						...this.syncStatuses,
-						[path]: { message: "File no longer exists.", type: "failed" },
+						[path]: {
+							error: new Error("File no longer exists."),
+							type: "failed",
+						},
 					};
 					this.render();
 					return [];
@@ -247,17 +257,14 @@ export class ExtaggeratedPanelView extends ItemView {
 						},
 					};
 				} else {
-					const message = outcome.error?.message ?? "XT tag sync failed.";
+					const error = outcome.error ?? new Error("XT tag sync failed.");
 					new Notice(
-						`XT could not tag ${outcome.file.basename}: ${message}`,
+						`XT could not tag ${outcome.file.basename}: ${error.message}`,
 						8_000,
 					);
 					this.syncStatuses = {
 						...this.syncStatuses,
-						[outcome.file.path]: {
-							message,
-							type: "failed",
-						},
+						[outcome.file.path]: { error, type: "failed" },
 					};
 				}
 				this.render();

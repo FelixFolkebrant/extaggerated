@@ -2,6 +2,7 @@ import { type App, PluginSettingTab, Setting } from "obsidian";
 import type ExtaggeratedPlugin from "./main";
 
 export interface ExtaggeratedSettings {
+	developerMode: boolean;
 	maxBatchTokens: number;
 	openRouterApiKey: string;
 	model: string;
@@ -9,6 +10,7 @@ export interface ExtaggeratedSettings {
 }
 
 export const DEFAULT_SETTINGS: ExtaggeratedSettings = {
+	developerMode: false,
 	maxBatchTokens: 4000,
 	openRouterApiKey: "",
 	model: "google/gemini-3.1-flash-lite",
@@ -42,6 +44,18 @@ export class ExtaggeratedSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				});
 		});
+
+		new Setting(containerEl)
+			.setName("Developer mode")
+			.setDesc("Show copyable details for failed tag syncs.")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.developerMode)
+					.onChange(async (value) => {
+						this.plugin.settings.developerMode = value;
+						await this.plugin.saveSettings();
+					});
+			});
 
 		new Setting(containerEl).setName("Model").addText((text) => {
 			text

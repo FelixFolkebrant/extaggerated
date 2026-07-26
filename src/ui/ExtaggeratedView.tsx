@@ -7,7 +7,9 @@ type PanelMode = "tagging" | "nodes";
 
 interface ExtaggeratedViewProps {
 	changedFiles: ChangedFileQueueItem[];
+	developerMode: boolean;
 	hasApiKey: boolean;
+	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
 	onOpenNodeCreation: () => void;
 	onOpenSettings: () => void;
 	onRefreshQueue: () => void;
