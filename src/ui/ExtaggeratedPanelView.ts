@@ -173,7 +173,7 @@ export class ExtaggeratedPanelView extends ItemView {
 				persistedFailures[item.path] = { error, type: "failed" };
 			}
 		}
-		this.syncStatuses = { ...this.syncStatuses, ...persistedFailures };
+		this.syncStatuses = persistedFailures;
 		this.queueLoading = false;
 		this.selectedPaths = new Set(
 			[...this.selectedPaths].filter((path) =>
