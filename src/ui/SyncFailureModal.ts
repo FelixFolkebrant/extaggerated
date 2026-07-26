@@ -15,7 +15,7 @@ export class SyncFailureModal extends Modal {
 		this.contentEl.createEl("h2", { text: "Tag sync failure" });
 		const details = this.contentEl.createEl("textarea", {
 			attr: { readonly: "true", rows: "12" },
-			cls: "w-full rounded bg-black p-3 font-(family-name:--font-monospace) text-sm text-(--text-muted)",
+			cls: "w-full rounded border border-(--background-modifier-border) bg-black p-3 font-(family-name:--font-monospace) text-sm text-white/80",
 		});
 		details.value = report;
 
