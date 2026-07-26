@@ -309,11 +309,19 @@ function updateFrontmatter(
 	mutate: (frontmatter: Record<string, unknown>) => void,
 ): string {
 	const info = getFrontMatterInfo(markdown);
-	const parsed = info.exists ? parseYaml(info.frontmatter) : {};
-	const frontmatter =
-		typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-			? parsed
-			: {};
+	let frontmatter: Record<string, unknown> = {};
+
+	if (info.exists && info.frontmatter.trim().length > 0) {
+		const parsed = parseYaml(info.frontmatter);
+		if (
+			typeof parsed !== "object" ||
+			parsed === null ||
+			Array.isArray(parsed)
+		) {
+			throw new Error("XT cannot tag a note with non-mapping frontmatter.");
+		}
+		frontmatter = parsed;
+	}
 
 	mutate(frontmatter);
 	const yaml = stringifyYaml(frontmatter).trimEnd();

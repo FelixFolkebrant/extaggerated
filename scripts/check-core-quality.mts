@@ -102,7 +102,13 @@ assert.deepEqual(
 assert.deepEqual(parseSettings(null), DEFAULT_SETTINGS);
 
 globalThis.__notices = [];
-globalThis.__savedSettings = { ...validSettings, maxBatchTokens: "many" };
+globalThis.__savedSettings = {
+	...validSettings,
+	developerMode: "yes",
+	model: "   ",
+	nodesFolder: null,
+	openRouterApiKey: 42,
+};
 const PluginClass = (await loadModule("src/main.ts")).default as new () => {
 	commands: Array<{ id: string; callback: () => void }>;
 	loadSettings: () => Promise<void>;
@@ -112,8 +118,8 @@ const PluginClass = (await loadModule("src/main.ts")).default as new () => {
 const settingsPlugin = new PluginClass();
 await settingsPlugin.loadSettings();
 assert.deepEqual(settingsPlugin.settings, {
-	...validSettings,
-	maxBatchTokens: DEFAULT_SETTINGS.maxBatchTokens,
+	...DEFAULT_SETTINGS,
+	maxBatchTokens: validSettings.maxBatchTokens,
 });
 
 const { generateTagsForNotes, hashNoteBody } = (await loadModule(
@@ -248,6 +254,17 @@ assert.equal(
 assert.match(
 	withoutFrontmatter.writtenMarkdown ?? "",
 	/^---\n\{"tags":\["security"\],"xt_content_hash":"[a-f\d]{64}"\}\n---\nSame body$/,
+);
+
+const nonMapping = await syncWithReads([
+	'---\n["keep-me"]\n---\nSame body',
+	'---\n["keep-me"]\n---\nSame body',
+]);
+assert.equal(nonMapping.writtenMarkdown, undefined);
+assert.equal(nonMapping.frontmatter.tags, undefined);
+assert.match(
+	nonMapping.outcome?.error?.message ?? "",
+	/non-mapping frontmatter/,
 );
 
 const frontmatterOnly = await syncWithReads([
@@ -425,9 +442,80 @@ const captureUnhandled = (reason: unknown) => {
 process.on("unhandledRejection", captureUnhandled);
 openCommand.callback();
 await new Promise((resolve) => setImmediate(resolve));
-process.off("unhandledRejection", captureUnhandled);
 assert.deepEqual(unhandled, []);
 assert.equal(
 	globalThis.__notices.at(-1),
 	"Opening Extaggerated failed: workspace unavailable",
 );
+
+const commandApp = globalThis.__pluginApp as {
+	fileManager?: {
+		processFrontMatter: (
+			file: unknown,
+			mutate: (frontmatter: Record<string, unknown>) => void,
+		) => Promise<void>;
+	};
+	metadataCache: {
+		getFileCache?: () => { frontmatter: Record<string, unknown> };
+	};
+	vault: {
+		getMarkdownFiles?: () => unknown[];
+	};
+	workspace: {
+		getActiveFile: () => unknown;
+	};
+};
+commandApp.fileManager = {
+	processFrontMatter: async (_file, mutate) => {
+		mutate({});
+	},
+};
+commandApp.metadataCache.getFileCache = () => ({ frontmatter: {} });
+let activeFileReads = 0;
+commandApp.workspace.getActiveFile = () => {
+	if (activeFileReads++ === 0) {
+		return file;
+	}
+	throw new Error("header refresh unavailable");
+};
+const ignoreCommand = commandPlugin.commands.find(
+	(command) => command.id === "ignore-active-note",
+);
+assert.ok(ignoreCommand);
+ignoreCommand.callback();
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(
+	globalThis.__notices.at(-1),
+	"Ignore active note failed: header refresh unavailable",
+);
+
+activeFileReads = 0;
+commandApp.metadataCache.getFileCache = () => ({
+	frontmatter: { xt_ignore: true },
+});
+const clearActiveCommand = commandPlugin.commands.find(
+	(command) => command.id === "debug-clear-xt-state-active-note",
+);
+assert.ok(clearActiveCommand);
+clearActiveCommand.callback();
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(
+	globalThis.__notices.at(-1),
+	"Clearing XT metadata from the active note failed: header refresh unavailable",
+);
+
+commandApp.vault.getMarkdownFiles = () => {
+	throw new Error("vault unavailable");
+};
+const clearVaultCommand = commandPlugin.commands.find(
+	(command) => command.id === "debug-clear-xt-state-vault",
+);
+assert.ok(clearVaultCommand);
+clearVaultCommand.callback();
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(
+	globalThis.__notices.at(-1),
+	"Clearing XT metadata from the vault failed: vault unavailable",
+);
+assert.deepEqual(unhandled, []);
+process.off("unhandledRejection", captureUnhandled);
