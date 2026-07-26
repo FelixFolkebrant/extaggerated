@@ -41,6 +41,11 @@ export class NodeCreationModal extends Modal {
 		const cancelButton = actions.createEl("button", { text: "Cancel" });
 		const createButton = actions.createEl("button", { text: "Create" });
 		createButton.addClass("mod-cta");
+		const error = this.contentEl.createEl("p", {
+			attr: { role: "alert" },
+			cls: "mt-3 text-sm text-(--color-red)",
+		});
+		let creating = false;
 
 		const updateCreateButton = () => {
 			createButton.disabled = !this.canCreate();
@@ -58,18 +63,25 @@ export class NodeCreationModal extends Modal {
 			this.close();
 		});
 		createButton.addEventListener("click", async () => {
-			if (!this.canCreate()) {
+			if (!this.canCreate() || creating) {
 				return;
 			}
 
+			creating = true;
 			createButton.disabled = true;
+			cancelButton.disabled = true;
+			error.empty();
 			try {
 				await this.onCreate({
 					description: this.description.trim(),
 					name: this.name.trim(),
 				});
 				this.close();
-			} catch {
+			} catch (cause) {
+				const message = cause instanceof Error ? cause.message : String(cause);
+				error.setText(message);
+				cancelButton.disabled = false;
+				creating = false;
 				updateCreateButton();
 			}
 		});
