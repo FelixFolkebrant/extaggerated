@@ -1,24 +1,23 @@
-import { ItemView, Notice } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice } from "obsidian";
 import type { Root } from "react-dom/client";
-import type ExtaggeratedPlugin from "../main";
 import {
+	type ChangedFileQueueItem,
 	getChangedFileQueue,
 	getXtFailure,
-	isTaggableFile,
-	type ChangedFileQueueItem,
 } from "../freshness";
-import { syncNoteTagBatch } from "../noteSync";
+import type ExtaggeratedPlugin from "../main";
 import { generateNode } from "../nodeGeneration";
-import type { BatchSyncStatus } from "./ChangedFileQueue";
-import { TagAllConfirmationModal } from "./TagAllConfirmationModal";
+import { syncNoteTagBatch } from "../noteSync";
+import { type BatchSyncStatus, canSyncFile } from "./ChangedFileQueue";
 import {
+	type ExtaggeratedViewState,
 	mountExtaggeratedView,
 	renderExtaggeratedView,
-	type ExtaggeratedViewState,
 } from "./mount";
 import { NodeCreationModal, type NodeDraft } from "./NodeCreationModal";
 import { SyncFailureModal } from "./SyncFailureModal";
+import { TagAllConfirmationModal } from "./TagAllConfirmationModal";
 
 export const XT_VIEW_TYPE = "extaggerated-view";
 
@@ -210,10 +209,7 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private isSyncableFile(file: ChangedFileQueueItem): boolean {
-		return (
-			file.status !== "ignored" &&
-			(isTaggableFile(file) || this.syncStatuses[file.path]?.type === "failed")
-		);
+		return canSyncFile(file, this.syncStatuses[file.path]);
 	}
 
 	private async confirmAndSyncAll(): Promise<void> {
@@ -250,32 +246,28 @@ export class ExtaggeratedPanelView extends ItemView {
 		}
 
 		this.taggingPaths = new Set(paths);
-		this.render();
 
 		try {
+			const nextSyncStatuses: Record<string, BatchSyncStatus> = {
+				...this.syncStatuses,
+			};
 			const files = paths.flatMap((path) => {
 				const file = this.plugin.app.vault.getFileByPath(path);
 
 				if (!file) {
 					new Notice(`XT could not tag ${path}: file no longer exists.`, 8_000);
-					this.syncStatuses = {
-						...this.syncStatuses,
-						[path]: {
-							error: new Error("File no longer exists."),
-							type: "failed",
-						},
+					nextSyncStatuses[path] = {
+						error: new Error("File no longer exists."),
+						type: "failed",
 					};
-					this.render();
 					return [];
 				}
 
-				this.syncStatuses = {
-					...this.syncStatuses,
-					[path]: { type: "syncing" },
-				};
-				this.render();
+				nextSyncStatuses[path] = { type: "syncing" };
 				return [file];
 			});
+			this.syncStatuses = nextSyncStatuses;
+			this.render();
 
 			await syncNoteTagBatch(this.plugin, files, (outcome) => {
 				if (outcome.result) {

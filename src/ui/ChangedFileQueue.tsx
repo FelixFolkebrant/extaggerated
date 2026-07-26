@@ -5,6 +5,17 @@ export type BatchSyncStatus =
 	| { type: "synced"; message: string }
 	| { type: "failed"; error: Error };
 
+export function canSyncFile(
+	file: ChangedFileQueueItem,
+	status?: BatchSyncStatus,
+): boolean {
+	return (
+		file.status !== "ignored" &&
+		file.status !== "unavailable" &&
+		(isTaggableFile(file) || status?.type === "failed")
+	);
+}
+
 interface ChangedFileQueueProps {
 	changedFiles: ChangedFileQueueItem[];
 	developerMode: boolean;
@@ -46,29 +57,34 @@ export function ChangedFileQueue({
 	const tagging = new Set(taggingPaths);
 	const isTagging = tagging.size > 0;
 	const isSyncable = (file: ChangedFileQueueItem) =>
-		file.status !== "ignored" &&
-		(isTaggableFile(file) || syncStatuses[file.path]?.type === "failed");
+		canSyncFile(file, syncStatuses[file.path]);
 	const syncableCount = changedFiles.filter(isSyncable).length;
 	const selectedSyncableCount = changedFiles.filter(
 		(file) => isSyncable(file) && selected.has(file.path),
 	).length;
-	const queueFiles = changedFiles.filter(isSyncable).sort((a, b) => {
-		const order = a.path.localeCompare(b.path);
-		return sortAscending ? order : -order;
-	});
-	const taggingFiles = queueFiles.filter((file) => tagging.has(file.path));
+	const queueFiles = changedFiles
+		.filter((file) => isSyncable(file) || file.status === "unavailable")
+		.sort((a, b) => {
+			const order = a.path.localeCompare(b.path);
+			return sortAscending ? order : -order;
+		});
+	const taggingFiles = queueFiles.filter(
+		(file) => isSyncable(file) && tagging.has(file.path),
+	);
 	const matchesSearch = (file: ChangedFileQueueItem) =>
 		file.path.toLowerCase().includes(searchQuery.toLowerCase());
 	const failedFiles = queueFiles.filter(
 		(file) =>
+			isSyncable(file) &&
 			!tagging.has(file.path) &&
 			syncStatuses[file.path]?.type === "failed" &&
 			matchesSearch(file),
 	);
 	const visibleFiles = queueFiles.filter(
 		(file) =>
-			!tagging.has(file.path) &&
-			syncStatuses[file.path]?.type !== "failed" &&
+			(!isSyncable(file) ||
+				(!tagging.has(file.path) &&
+					syncStatuses[file.path]?.type !== "failed")) &&
 			matchesSearch(file),
 	);
 
@@ -223,8 +239,9 @@ function ChangedFileQueueRow({
 	tagging,
 }: ChangedFileQueueRowProps) {
 	const status = queueStatusDisplay(file);
-	const taggable = isTaggableFile(file) || syncStatus?.type === "failed";
-	const selectionClassName = selected ? "opacity-100" : "opacity-50";
+	const taggable = canSyncFile(file, syncStatus);
+	const isSelected = taggable && selected;
+	const selectionClassName = isSelected ? "opacity-100" : "opacity-50";
 
 	if (tagging) {
 		return (
@@ -235,16 +252,16 @@ function ChangedFileQueueRow({
 						className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-(--interactive-accent) border-r-transparent"
 						role="status"
 					/>
-					<span
-						className="min-w-0 flex-1 truncate animate-pulse text-(--interactive-accent)"
-						onClick={(event) => {
-							if (event.ctrlKey || event.metaKey) {
-								onOpenFile(file);
-							}
+					<button
+						className="min-w-0 flex-1 truncate animate-pulse border-0 bg-transparent p-0 text-left text-(--interactive-accent) shadow-none hover:bg-transparent"
+						onClick={() => {
+							onOpenFile(file);
 						}}
+						title={`Open ${file.path}`}
+						type="button"
 					>
 						{file.fileName}
-					</span>
+					</button>
 				</div>
 			</li>
 		);
@@ -253,36 +270,46 @@ function ChangedFileQueueRow({
 	return (
 		<li title={`${file.path} — ${status.label}`}>
 			<div className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5 hover:bg-(--background-primary-alt)">
-				<label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-					<input
-						aria-label={`Tag ${file.path}`}
-						checked={selected}
-						className="h-4 w-4 shrink-0 accent-(--interactive-accent) disabled:cursor-default"
-						disabled={!taggable}
-						onChange={() => {
-							onToggleQueuedFile(file.path);
-						}}
-						type="checkbox"
-					/>
-					<span
-						className={`min-w-0 flex-1 truncate ${status.className} ${selectionClassName}`}
-						onClick={(event) => {
-							if (event.ctrlKey || event.metaKey) {
-								event.preventDefault();
-								onOpenFile(file);
-							}
-						}}
-					>
-						{file.fileName}
-					</span>
-				</label>
-				<RowEnd
-					developerMode={developerMode}
-					file={file}
-					onOpenFailure={onOpenFailure}
-					selected={selected}
-					syncStatus={syncStatus}
+				<input
+					aria-label={
+						taggable
+							? `Tag ${file.path}`
+							: `Cannot tag ${file.path}: ${status.label}`
+					}
+					checked={isSelected}
+					className="h-4 w-4 shrink-0 accent-(--interactive-accent) disabled:cursor-default"
+					disabled={!taggable}
+					onChange={() => {
+						onToggleQueuedFile(file.path);
+					}}
+					type="checkbox"
 				/>
+				<button
+					className={`min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left shadow-none hover:bg-transparent ${status.className} ${selectionClassName}`}
+					onClick={() => {
+						onOpenFile(file);
+					}}
+					title={`Open ${file.path}`}
+					type="button"
+				>
+					{file.fileName}
+				</button>
+				{file.status === "unavailable" ? (
+					<span
+						className="max-w-[40%] truncate text-xs text-(--color-red)"
+						title={file.message}
+					>
+						{file.message}
+					</span>
+				) : (
+					<RowEnd
+						developerMode={developerMode}
+						file={file}
+						onOpenFailure={onOpenFailure}
+						selected={isSelected}
+						syncStatus={syncStatus}
+					/>
+				)}
 			</div>
 		</li>
 	);
@@ -326,12 +353,16 @@ function RowEnd({
 	}
 
 	return file.status === "untagged" ? (
-		<span
-			aria-label="Never tagged"
-			className={`text-lg text-(--text-muted) ${selected ? "opacity-100" : "opacity-50"}`}
-		>
-			+
-		</span>
+		<>
+			<span
+				aria-hidden="true"
+				className={`text-lg text-(--text-muted) ${selected ? "opacity-100" : "opacity-50"}`}
+				title="Never tagged"
+			>
+				+
+			</span>
+			<span className="sr-only">Never tagged</span>
+		</>
 	) : null;
 }
 

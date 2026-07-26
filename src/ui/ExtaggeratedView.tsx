@@ -5,7 +5,7 @@ import { XtMark } from "./XtMark";
 
 type PanelMode = "tagging" | "nodes";
 
-interface ExtaggeratedViewProps {
+export interface ExtaggeratedViewProps {
 	changedFiles: ChangedFileQueueItem[];
 	developerMode: boolean;
 	hasApiKey: boolean;
@@ -147,12 +147,26 @@ function FileStatusBar({
 			label: "XT ignored",
 			type: "ignored",
 		},
+		{
+			className: "bg-(--color-red)",
+			label: "Unavailable",
+			type: "unavailable",
+		},
 	] as const;
+	const distributionLabel = statuses
+		.map((status) => {
+			const count = changedFiles.filter(
+				(file) => file.status === status.type,
+			).length;
+			return `${status.label}: ${count}`;
+		})
+		.join(", ");
 
 	return (
 		<div
-			aria-label="File status distribution"
+			aria-label={`File status distribution. ${distributionLabel}`}
 			className="flex h-2 overflow-hidden rounded-full bg-(--background-primary-alt)"
+			role="img"
 		>
 			{statuses.map((status) => {
 				const count = changedFiles.filter(
