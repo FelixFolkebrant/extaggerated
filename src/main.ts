@@ -16,7 +16,6 @@ import {
 	XT_VIEW_TYPE,
 } from "./ui/ExtaggeratedPanelView";
 import { registerHeaderSyncIndicator } from "./ui/headerSyncIndicator";
-import { OverwriteWarningModal } from "./ui/OverwriteWarningModal";
 
 export default class ExtaggeratedPlugin extends Plugin {
 	settings: ExtaggeratedSettings = DEFAULT_SETTINGS;
@@ -130,23 +129,6 @@ export default class ExtaggeratedPlugin extends Plugin {
 		});
 
 		this.app.workspace.revealLeaf(leaf);
-	}
-
-	async initializeTagging(): Promise<void> {
-		if (this.settings.openRouterApiKey.length === 0) {
-			new Notice("Add an OpenRouter API key before initializing XT tagging.");
-			return;
-		}
-
-		const confirmed = await new OverwriteWarningModal(this.app).openAndWait();
-
-		if (!confirmed) {
-			return;
-		}
-
-		new Notice(
-			"XT tagging initialization confirmed. Changed-note queue comes next.",
-		);
 	}
 
 	private async ignoreActiveNote(): Promise<void> {
