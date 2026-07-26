@@ -6,7 +6,10 @@ import { ExtaggeratedView } from "./ExtaggeratedView";
 
 export interface ExtaggeratedViewState {
 	changedFiles: ChangedFileQueueItem[];
+	developerMode: boolean;
 	hasApiKey: boolean;
+	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
+	onOpenFile: (file: ChangedFileQueueItem) => void;
 	onOpenNodeCreation: () => void;
 	onOpenSettings: () => void;
 	onRefreshQueue: () => void;

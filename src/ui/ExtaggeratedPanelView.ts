@@ -4,6 +4,7 @@ import type { Root } from "react-dom/client";
 import type ExtaggeratedPlugin from "../main";
 import {
 	getChangedFileQueue,
+	getXtFailure,
 	isTaggableFile,
 	type ChangedFileQueueItem,
 } from "../freshness";
@@ -17,6 +18,7 @@ import {
 	type ExtaggeratedViewState,
 } from "./mount";
 import { NodeCreationModal, type NodeDraft } from "./NodeCreationModal";
+import { SyncFailureModal } from "./SyncFailureModal";
 
 export const XT_VIEW_TYPE = "extaggerated-view";
 
@@ -78,7 +80,21 @@ export class ExtaggeratedPanelView extends ItemView {
 	private viewState(): ExtaggeratedViewState {
 		return {
 			changedFiles: this.changedFiles,
+			developerMode: this.plugin.settings.developerMode,
 			hasApiKey: this.plugin.settings.openRouterApiKey.length > 0,
+			onOpenFailure: (file, error) => {
+				if (this.plugin.settings.developerMode) {
+					new SyncFailureModal(this.app, file.path, error).open();
+				}
+			},
+			onOpenFile: (file) => {
+				const vaultFile = this.app.vault.getFileByPath(file.path);
+				if (!vaultFile) {
+					new Notice(`XT could not open ${file.path}: file no longer exists.`);
+					return;
+				}
+				void this.app.workspace.getLeaf(true).openFile(vaultFile);
+			},
 			onOpenNodeCreation: () => {
 				this.openNodeCreation();
 			},
@@ -154,11 +170,23 @@ export class ExtaggeratedPanelView extends ItemView {
 		}
 
 		this.changedFiles = changedFiles;
+		const persistedFailures: Record<string, BatchSyncStatus> = {};
+		for (const item of changedFiles) {
+			const file = this.plugin.app.vault.getFileByPath(item.path);
+			const error =
+				item.status === "ignored" || !file
+					? null
+					: getXtFailure(this.plugin, file);
+			if (error) {
+				persistedFailures[item.path] = { error, type: "failed" };
+			}
+		}
+		this.syncStatuses = persistedFailures;
 		this.queueLoading = false;
 		this.selectedPaths = new Set(
 			[...this.selectedPaths].filter((path) =>
 				this.changedFiles.some(
-					(file) => file.path === path && isTaggableFile(file),
+					(file) => file.path === path && this.isSyncableFile(file),
 				),
 			),
 		);
@@ -176,7 +204,16 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private syncableQueuePaths(): string[] {
-		return this.changedFiles.filter(isTaggableFile).map((file) => file.path);
+		return this.changedFiles
+			.filter((file) => this.isSyncableFile(file))
+			.map((file) => file.path);
+	}
+
+	private isSyncableFile(file: ChangedFileQueueItem): boolean {
+		return (
+			file.status !== "ignored" &&
+			(isTaggableFile(file) || this.syncStatuses[file.path]?.type === "failed")
+		);
 	}
 
 	private async confirmAndSyncAll(): Promise<void> {
@@ -198,6 +235,10 @@ export class ExtaggeratedPanelView extends ItemView {
 	}
 
 	private async syncQueuedFiles(paths: string[]): Promise<void> {
+		if (this.taggingPaths.size > 0) {
+			return;
+		}
+
 		if (paths.length === 0) {
 			new Notice("Select at least one queued note to sync.");
 			return;
@@ -219,7 +260,10 @@ export class ExtaggeratedPanelView extends ItemView {
 					new Notice(`XT could not tag ${path}: file no longer exists.`, 8_000);
 					this.syncStatuses = {
 						...this.syncStatuses,
-						[path]: { message: "File no longer exists.", type: "failed" },
+						[path]: {
+							error: new Error("File no longer exists."),
+							type: "failed",
+						},
 					};
 					this.render();
 					return [];
@@ -243,17 +287,14 @@ export class ExtaggeratedPanelView extends ItemView {
 						},
 					};
 				} else {
-					const message = outcome.error?.message ?? "XT tag sync failed.";
+					const error = outcome.error ?? new Error("XT tag sync failed.");
 					new Notice(
-						`XT could not tag ${outcome.file.basename}: ${message}`,
+						`XT could not tag ${outcome.file.basename}: ${error.message}`,
 						8_000,
 					);
 					this.syncStatuses = {
 						...this.syncStatuses,
-						[outcome.file.path]: {
-							message,
-							type: "failed",
-						},
+						[outcome.file.path]: { error, type: "failed" },
 					};
 				}
 				this.render();

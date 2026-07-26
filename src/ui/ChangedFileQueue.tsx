@@ -3,11 +3,14 @@ import { type ChangedFileQueueItem, isTaggableFile } from "../freshness";
 export type BatchSyncStatus =
 	| { type: "syncing" }
 	| { type: "synced"; message: string }
-	| { type: "failed"; message: string };
+	| { type: "failed"; error: Error };
 
 interface ChangedFileQueueProps {
 	changedFiles: ChangedFileQueueItem[];
+	developerMode: boolean;
 	hasApiKey: boolean;
+	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
+	onOpenFile: (file: ChangedFileQueueItem) => void;
 	onSearchChange: (query: string) => void;
 	onSyncAll: () => void;
 	onSyncSelected: () => void;
@@ -23,7 +26,10 @@ interface ChangedFileQueueProps {
 
 export function ChangedFileQueue({
 	changedFiles,
+	developerMode,
 	hasApiKey,
+	onOpenFailure,
+	onOpenFile,
 	onSearchChange,
 	onSyncAll,
 	onSyncSelected,
@@ -38,19 +44,32 @@ export function ChangedFileQueue({
 }: ChangedFileQueueProps) {
 	const selected = new Set(selectedPaths);
 	const tagging = new Set(taggingPaths);
-	const syncableCount = changedFiles.filter(isTaggableFile).length;
+	const isTagging = tagging.size > 0;
+	const isSyncable = (file: ChangedFileQueueItem) =>
+		file.status !== "ignored" &&
+		(isTaggableFile(file) || syncStatuses[file.path]?.type === "failed");
+	const syncableCount = changedFiles.filter(isSyncable).length;
 	const selectedSyncableCount = changedFiles.filter(
-		(file) => isTaggableFile(file) && selected.has(file.path),
+		(file) => isSyncable(file) && selected.has(file.path),
 	).length;
-	const queueFiles = changedFiles.filter(isTaggableFile).sort((a, b) => {
+	const queueFiles = changedFiles.filter(isSyncable).sort((a, b) => {
 		const order = a.path.localeCompare(b.path);
 		return sortAscending ? order : -order;
 	});
 	const taggingFiles = queueFiles.filter((file) => tagging.has(file.path));
+	const matchesSearch = (file: ChangedFileQueueItem) =>
+		file.path.toLowerCase().includes(searchQuery.toLowerCase());
+	const failedFiles = queueFiles.filter(
+		(file) =>
+			!tagging.has(file.path) &&
+			syncStatuses[file.path]?.type === "failed" &&
+			matchesSearch(file),
+	);
 	const visibleFiles = queueFiles.filter(
 		(file) =>
 			!tagging.has(file.path) &&
-			file.path.toLowerCase().includes(searchQuery.toLowerCase()),
+			syncStatuses[file.path]?.type !== "failed" &&
+			matchesSearch(file),
 	);
 
 	return (
@@ -70,7 +89,12 @@ export function ChangedFileQueue({
 			<div className="mx-3 grid grid-cols-2 gap-3">
 				<button
 					className="rounded bg-(--interactive-accent) px-3 py-2 text-sm font-medium text-(--text-on-accent) disabled:cursor-not-allowed disabled:opacity-60"
-					disabled={!hasApiKey || queueLoading || selectedSyncableCount === 0}
+					disabled={
+						!hasApiKey ||
+						queueLoading ||
+						isTagging ||
+						selectedSyncableCount === 0
+					}
 					onClick={onSyncSelected}
 					type="button"
 				>
@@ -78,7 +102,9 @@ export function ChangedFileQueue({
 				</button>
 				<button
 					className="rounded bg-(--background-primary-alt) px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-					disabled={!hasApiKey || queueLoading || syncableCount === 0}
+					disabled={
+						!hasApiKey || queueLoading || isTagging || syncableCount === 0
+					}
 					onClick={onSyncAll}
 					type="button"
 				>
@@ -96,7 +122,9 @@ export function ChangedFileQueue({
 					Name {sortAscending ? "↑" : "↓"}
 				</button>
 				<span className="text-xs text-(--text-muted)">
-					{queueLoading ? "Refreshing" : `${visibleFiles.length} files`}
+					{queueLoading
+						? "Refreshing"
+						: `${visibleFiles.length + failedFiles.length} files`}
 				</span>
 			</div>
 
@@ -112,12 +140,39 @@ export function ChangedFileQueue({
 						<ul className="m-0 list-none p-0">
 							{taggingFiles.map((file) => (
 								<ChangedFileQueueRow
+									developerMode={developerMode}
 									file={file}
 									key={file.path}
+									onOpenFailure={onOpenFailure}
+									onOpenFile={onOpenFile}
 									onToggleQueuedFile={onToggleQueuedFile}
 									selected={selected.has(file.path)}
 									syncStatus={syncStatuses[file.path]}
 									tagging
+								/>
+							))}
+						</ul>
+					</details>
+				) : null}
+				{failedFiles.length > 0 ? (
+					<details
+						className="mb-2 rounded bg-(--background-primary-alt) py-1"
+						open
+					>
+						<summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-(--color-red)">
+							Failed ({failedFiles.length})
+						</summary>
+						<ul className="m-0 list-none p-0">
+							{failedFiles.map((file) => (
+								<ChangedFileQueueRow
+									developerMode={developerMode}
+									file={file}
+									key={file.path}
+									onOpenFailure={onOpenFailure}
+									onOpenFile={onOpenFile}
+									onToggleQueuedFile={onToggleQueuedFile}
+									selected={selected.has(file.path)}
+									syncStatus={syncStatuses[file.path]}
 								/>
 							))}
 						</ul>
@@ -129,8 +184,11 @@ export function ChangedFileQueue({
 					<ul className="m-0 list-none p-0">
 						{visibleFiles.map((file) => (
 							<ChangedFileQueueRow
+								developerMode={developerMode}
 								file={file}
 								key={file.path}
+								onOpenFailure={onOpenFailure}
+								onOpenFile={onOpenFile}
 								onToggleQueuedFile={onToggleQueuedFile}
 								selected={selected.has(file.path)}
 								syncStatus={syncStatuses[file.path]}
@@ -144,7 +202,10 @@ export function ChangedFileQueue({
 }
 
 interface ChangedFileQueueRowProps {
+	developerMode: boolean;
 	file: ChangedFileQueueItem;
+	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
+	onOpenFile: (file: ChangedFileQueueItem) => void;
 	onToggleQueuedFile: (path: string) => void;
 	selected: boolean;
 	syncStatus?: BatchSyncStatus;
@@ -152,14 +213,17 @@ interface ChangedFileQueueRowProps {
 }
 
 function ChangedFileQueueRow({
+	developerMode,
 	file,
+	onOpenFailure,
+	onOpenFile,
 	onToggleQueuedFile,
 	selected,
 	syncStatus,
 	tagging,
 }: ChangedFileQueueRowProps) {
 	const status = queueStatusDisplay(file);
-	const taggable = isTaggableFile(file);
+	const taggable = isTaggableFile(file) || syncStatus?.type === "failed";
 	const selectionClassName = selected ? "opacity-100" : "opacity-50";
 
 	if (tagging) {
@@ -171,7 +235,14 @@ function ChangedFileQueueRow({
 						className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-(--interactive-accent) border-r-transparent"
 						role="status"
 					/>
-					<span className="min-w-0 flex-1 truncate animate-pulse text-(--interactive-accent)">
+					<span
+						className="min-w-0 flex-1 truncate animate-pulse text-(--interactive-accent)"
+						onClick={(event) => {
+							if (event.ctrlKey || event.metaKey) {
+								onOpenFile(file);
+							}
+						}}
+					>
 						{file.fileName}
 					</span>
 				</div>
@@ -181,34 +252,52 @@ function ChangedFileQueueRow({
 
 	return (
 		<li title={`${file.path} — ${status.label}`}>
-			<label className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-(--background-primary-alt)">
-				<input
-					aria-label={`Tag ${file.path}`}
-					checked={selected}
-					className="h-4 w-4 shrink-0 accent-(--interactive-accent) disabled:cursor-default"
-					disabled={!taggable}
-					onChange={() => {
-						onToggleQueuedFile(file.path);
-					}}
-					type="checkbox"
+			<div className="flex w-full min-w-0 items-center gap-2 px-3 py-1.5 hover:bg-(--background-primary-alt)">
+				<label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+					<input
+						aria-label={`Tag ${file.path}`}
+						checked={selected}
+						className="h-4 w-4 shrink-0 accent-(--interactive-accent) disabled:cursor-default"
+						disabled={!taggable}
+						onChange={() => {
+							onToggleQueuedFile(file.path);
+						}}
+						type="checkbox"
+					/>
+					<span
+						className={`min-w-0 flex-1 truncate ${status.className} ${selectionClassName}`}
+						onClick={(event) => {
+							if (event.ctrlKey || event.metaKey) {
+								event.preventDefault();
+								onOpenFile(file);
+							}
+						}}
+					>
+						{file.fileName}
+					</span>
+				</label>
+				<RowEnd
+					developerMode={developerMode}
+					file={file}
+					onOpenFailure={onOpenFailure}
+					selected={selected}
+					syncStatus={syncStatus}
 				/>
-				<span
-					className={`min-w-0 flex-1 truncate ${status.className} ${selectionClassName}`}
-				>
-					{file.fileName}
-				</span>
-				<RowEnd file={file} selected={selected} syncStatus={syncStatus} />
-			</label>
+			</div>
 		</li>
 	);
 }
 
 function RowEnd({
+	developerMode,
 	file,
+	onOpenFailure,
 	selected,
 	syncStatus,
 }: {
+	developerMode: boolean;
 	file: ChangedFileQueueItem;
+	onOpenFailure: (file: ChangedFileQueueItem, error: Error) => void;
 	selected: boolean;
 	syncStatus?: BatchSyncStatus;
 }) {
@@ -217,7 +306,23 @@ function RowEnd({
 	}
 
 	if (syncStatus?.type === "failed") {
-		return <span className="text-(--color-red)">!</span>;
+		return developerMode ? (
+			<button
+				aria-label={`Show tag failure report for ${file.path}`}
+				className="text-(--color-red)"
+				onClick={() => {
+					onOpenFailure(file, syncStatus.error);
+				}}
+				title={syncStatus.error.message}
+				type="button"
+			>
+				!
+			</button>
+		) : (
+			<span className="text-(--color-red)" title={syncStatus.error.message}>
+				!
+			</span>
+		);
 	}
 
 	return file.status === "untagged" ? (

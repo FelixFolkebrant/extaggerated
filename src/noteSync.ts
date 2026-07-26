@@ -89,6 +89,7 @@ export async function ignoreActiveNote(
 			delete frontmatter.tags;
 			delete frontmatter.xt_content_hash;
 		}
+		delete frontmatter.xt_failure;
 		frontmatter.xt_ignore = true;
 	});
 
@@ -180,14 +181,17 @@ export async function syncNoteTagBatch(
 	const notes: PreparedNote[] = [];
 	for (const file of files) {
 		if (isFileIgnored(plugin, file)) {
-			onComplete({
-				error: new Error(`${file.basename} is ignored by XT.`),
+			await completeFailure(
+				plugin,
 				file,
-			});
+				new Error(`${file.basename} is ignored by XT.`),
+				onComplete,
+			);
 			continue;
 		}
 
 		try {
+			await clearXtFailure(plugin, file);
 			const markdown = await plugin.app.vault.read(file);
 			const noteText = noteBodyForHash(markdown);
 			notes.push({
@@ -197,7 +201,7 @@ export async function syncNoteTagBatch(
 				noteText,
 			});
 		} catch (error) {
-			onComplete({ error: toError(error), file });
+			await completeFailure(plugin, file, toError(error), onComplete);
 		}
 	}
 
@@ -222,10 +226,12 @@ export async function syncNoteTagBatch(
 			for (const { id, note } of taggedNotes) {
 				const tags = tagsById.get(id);
 				if (!tags || tags.length === 0) {
-					onComplete({
-						error: new Error("OpenRouter returned no usable tags."),
-						file: note.file,
-					});
+					await completeFailure(
+						plugin,
+						note.file,
+						new Error("OpenRouter returned no usable tags."),
+						onComplete,
+					);
 					continue;
 				}
 
@@ -233,13 +239,13 @@ export async function syncNoteTagBatch(
 					await writeTags(plugin, note.file, tags, note.contentHash);
 					onComplete({ file: note.file, result: { tagCount: tags.length } });
 				} catch (error) {
-					onComplete({ error: toError(error), file: note.file });
+					await completeFailure(plugin, note.file, toError(error), onComplete);
 				}
 			}
 		} catch (error) {
 			const batchError = toError(error);
 			for (const note of batch) {
-				onComplete({ error: batchError, file: note.file });
+				await completeFailure(plugin, note.file, batchError, onComplete);
 			}
 		}
 	}
@@ -254,6 +260,48 @@ async function writeTags(
 	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
 		frontmatter.tags = tags;
 		frontmatter.xt_content_hash = contentHash;
+		delete frontmatter.xt_failure;
+	});
+}
+
+async function completeFailure(
+	plugin: ExtaggeratedPlugin,
+	file: TFile,
+	error: Error,
+	onComplete: (outcome: SyncNoteTagBatchOutcome) => void,
+): Promise<void> {
+	try {
+		await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			frontmatter.xt_failure = {
+				message: error.message,
+				name: error.name,
+				...(error.stack === undefined ? {} : { stack: error.stack }),
+			};
+		});
+	} catch (cause) {
+		onComplete({
+			error: new Error(
+				`XT could not save the failure report: ${toError(cause).message}`,
+			),
+			file,
+		});
+		return;
+	}
+
+	onComplete({ error, file });
+}
+
+async function clearXtFailure(
+	plugin: ExtaggeratedPlugin,
+	file: TFile,
+): Promise<void> {
+	const frontmatter = plugin.app.metadataCache.getFileCache(file)?.frontmatter;
+	if (!frontmatter || !Object.hasOwn(frontmatter, "xt_failure")) {
+		return;
+	}
+
+	await plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
+		delete frontmatter.xt_failure;
 	});
 }
 
@@ -263,6 +311,7 @@ function hasXtMetadata(plugin: ExtaggeratedPlugin, file: TFile): boolean {
 	return (
 		frontmatter !== undefined &&
 		(Object.hasOwn(frontmatter, "xt_content_hash") ||
+			Object.hasOwn(frontmatter, "xt_failure") ||
 			Object.hasOwn(frontmatter, "xt_ignore"))
 	);
 }
@@ -276,6 +325,7 @@ async function clearXtState(
 			delete frontmatter.tags;
 			delete frontmatter.xt_content_hash;
 		}
+		delete frontmatter.xt_failure;
 		delete frontmatter.xt_ignore;
 	});
 }
