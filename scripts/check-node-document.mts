@@ -62,6 +62,11 @@ const oldValidatorAccepted = [
 	"- A model-authored list",
 	"***",
 	"`model-authored code`",
+	"| Topic | Detail |\n| --- | --- |\n| A | B |",
+	"    model-authored code",
+	"A claim with a footnote[^1].",
+	"Use #security for this topic.",
+	"Contact <model@example.com>.",
 ];
 
 for (const context of oldValidatorAccepted) {
@@ -79,7 +84,7 @@ assert.doesNotThrow(() =>
 	parseNodeDocument(
 		{
 			overview:
-				"Security notes: passwords, passkeys, and recovery (in practical use).",
+				"Security notes: passwords, passkeys, recovery, and xt_content_hash ownership.",
 			sources: [
 				{
 					context:
@@ -91,6 +96,20 @@ assert.doesNotThrow(() =>
 		new Set(["1"]),
 	),
 );
+for (const overview of [
+	"Read https://example.com/unrelated.",
+	"## Model-authored section",
+	"| Topic | Detail |\n| --- | --- |\n| A | B |",
+]) {
+	assert.throws(
+		() =>
+			parseNodeDocument(
+				{ overview, sources: [{ context: "Context", id: "1" }] },
+				new Set(["1"]),
+			),
+		/invalid node document/,
+	);
+}
 assert.throws(
 	() =>
 		parseNodeDocument(

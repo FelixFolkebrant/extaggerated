@@ -105,7 +105,10 @@ export async function generateNode(
 
 export function nodeName(value: string): string {
 	const name = value.trim();
-	if (invalidPathSegment(name)) {
+	if (
+		invalidPathSegment(name) ||
+		new TextEncoder().encode(`${name}.md`).length > 255
+	) {
 		throw new Error("Enter a node name that can be used as a file name.");
 	}
 
@@ -128,6 +131,7 @@ function invalidPathSegment(value: string): boolean {
 	const segment = value.trim();
 	return (
 		segment.length === 0 ||
+		new TextEncoder().encode(segment).length > 255 ||
 		segment !== value ||
 		segment === "." ||
 		segment === ".." ||

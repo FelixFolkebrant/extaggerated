@@ -1,34 +1,12 @@
 import assert from "node:assert/strict";
-import { build } from "esbuild";
+import { importBundled } from "./bundle-test-module.mts";
 
-const bundle = await build({
-	bundle: true,
-	entryPoints: ["src/nodeGeneration.ts"],
-	format: "esm",
-	platform: "node",
-	plugins: [
-		{
-			name: "obsidian-stub",
-			setup(build) {
-				build.onResolve({ filter: /^obsidian$/ }, () => ({
-					namespace: "obsidian-stub",
-					path: "obsidian",
-				}));
-				build.onLoad({ filter: /.*/, namespace: "obsidian-stub" }, () => ({
-					contents:
-						'export class TFolder {}; export function requestUrl() { throw new Error("provider called"); }',
-				}));
-			},
-		},
-	],
-	write: false,
-});
-
-const moduleUrl = `data:text/javascript;base64,${Buffer.from(
-	bundle.outputFiles[0].text,
-).toString("base64")}`;
-const { generateNode, nodeFolder, nodeName } = (await import(
-	moduleUrl
+const { generateNode, nodeFolder, nodeName } = (await importBundled(
+	"src/nodeGeneration.ts",
+	{
+		obsidian:
+			'export class TFolder {}; export function requestUrl() { throw new Error("provider called"); }',
+	},
 )) as typeof import("../src/nodeGeneration.ts");
 
 // These portable-invalid values previously passed and failed only after an
@@ -64,6 +42,12 @@ for (const reserved of [
 
 assert.equal(nodeName("COM10"), "COM10");
 assert.equal(nodeFolder("XT/console"), "XT/console");
+assert.throws(() => nodeName("a".repeat(253)), /file name/);
+assert.throws(() => nodeName("界".repeat(85)), /file name/);
+assert.throws(
+	() => nodeFolder(`XT/${"a".repeat(256)}`),
+	/vault-relative nodes folder/,
+);
 
 async function rejectsBeforeVault(
 	name: string,
@@ -93,27 +77,10 @@ async function rejectsBeforeVault(
 	assert.equal(appReads, 0);
 }
 
-// These catch generateNode bypassing or moving validation after vault work.
-await rejectsBeforeVault("Roadmap\u0007notes", "XT/Nodes", /file name/);
-await rejectsBeforeVault("Roadmap.", "XT/Nodes", /file name/);
-await rejectsBeforeVault("con.md", "XT/Nodes", /file name/);
+// One invalid name and folder prove generateNode cannot bypass or delay validation.
+await rejectsBeforeVault("a".repeat(253), "XT/Nodes", /file name/);
 await rejectsBeforeVault(
 	"Valid name",
-	"XT:Nodes",
-	/vault-relative nodes folder/,
-);
-await rejectsBeforeVault(
-	"Valid name",
-	"XT/Archive. /Nodes",
-	/vault-relative nodes folder/,
-);
-await rejectsBeforeVault(
-	"Valid name",
-	"XT/Archive /Nodes",
-	/vault-relative nodes folder/,
-);
-await rejectsBeforeVault(
-	"Valid name",
-	"XT/LPT9.txt",
+	`XT/${"界".repeat(86)}`,
 	/vault-relative nodes folder/,
 );
